@@ -21,7 +21,42 @@
 
 	let formEl: HTMLFormElement;
 
+	function log() {
+		const formJSON = formToJSON(formEl);
+		console.log();
+	}
+	function fill() {
+		fillForm(formEl, {
+			id: 'random-id',
+			username: 'yusaf.me',
+			password: '123456',
+			user: {
+				name: {
+					first: 'Yusaf',
+					second: 'Khaliq'
+				},
+				sex: 'male',
+				dob: new Date('1990-01-01T00:00:00.000Z'),
+				interests: ['politics', 'finance'],
+				contact: ['email', 'letter'],
+				consent: false
+			},
+			mode: 'dark',
+			do: { you: { agree: true } }
+		});
+	}
+	function clear() {
+		clearForm(formEl);
+	}
+	if (browser && form) {
+		console.log(form);
+	}
+
 	let attrs = attributes(form);
+	onMount(function () {
+		formEl = document.querySelector('form') as HTMLFormElement;
+		// fillForm(formEl, form);
+	});
 </script>
 
 <form method="POST">

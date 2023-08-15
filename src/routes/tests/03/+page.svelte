@@ -1,61 +1,15 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
-	import { formToJSON, fillForm, clearForm, attributes } from 'fragment-forms';
+	import { FragmentForm } from 'fragment-forms';
 	import { onMount } from 'svelte';
 	export let form;
 
-	// const attrs = attr({
-	// 	id: '',
-	// 	user: {
-	// 		name: {
-	// 			first: 'Yusaf',
-	// 			second: 'Khaliq'
-	// 		},
-	// 		sex: 'male',
-	// 		dob: new Date('1990-01-01T00:00:00.000Z'),
-	// 		interests: ['politics', 'finance'],
-	// 		contact: ['E-Mail'],
-	// 		consent: false
-	// 	}
-	// });
+	let attrs = FragmentForm.attributes(form);
 
-	let formEl: HTMLFormElement;
-
-	function log() {
-		const formJSON = formToJSON(formEl);
-		console.log();
-	}
-	function fill() {
-		fillForm(formEl, {
-			id: 'random-id',
-			username: 'yusaf.me',
-			password: '123456',
-			user: {
-				name: {
-					first: 'Yusaf',
-					second: 'Khaliq'
-				},
-				sex: 'male',
-				dob: new Date('1990-01-01T00:00:00.000Z'),
-				interests: ['politics', 'finance'],
-				contact: ['email', 'letter'],
-				consent: false
-			},
-			mode: 'dark',
-			do: { you: { agree: true } }
-		});
-	}
-	function clear() {
-		clearForm(formEl);
-	}
-	if (browser && form) {
-		console.log(form);
-	}
-
-	let attrs = attributes(form);
 	onMount(function () {
-		formEl = document.querySelector('form') as HTMLFormElement;
-		// fillForm(formEl, form);
+		const fragment = new FragmentForm(document.querySelector('form'));
+		fragment.fragmentOnInput(function (value: any) {
+			console.log(value);
+		});
 	});
 </script>
 
@@ -101,7 +55,7 @@
 	Labels<br />
 	Label 1:<input {...attrs('labels[]', 'text')} /><br />
 	Label 2:<input {...attrs('labels[]', 'text')} /><br />
-	Label 3:<input {...attrs('labels[]', 'text', '')} /><br />
+	Label 3:<input {...attrs('labels[]', 'text')} /><br />
 	Mode<br />
 	<select {...attrs('mode', 'select')}>
 		<option disabled selected value />
@@ -109,8 +63,13 @@
 		<option {...attrs('mode', 'option', 'light')} value="light">Light</option>
 	</select><br />
 	Agree:<input {...attrs('do.you.agree(boolean)', 'checkbox', true)} /><br />
+
+	<input {...attrs('one._$id', 'hidden', 'helllo')} /><br />
+	<input {...attrs('one[1]._$id', 'hidden', 'helllo 2')} /><br />
+	<br /><br />
+	Labels<br />
+	Label 1:<input {...attrs('one[1].value[]', 'text')} /><br />
+	Label 2:<input {...attrs('one[1].value[]', 'text')} /><br />
+	Label 3:<input {...attrs('one[1].value[]', 'text')} /><br />
 	<input type="submit" />
-	<input type="submit" value="log" on:click|preventDefault={log} />
-	<input type="submit" value="fill" on:click|preventDefault={fill} />
-	<input type="submit" value="clear" on:click|preventDefault={clear} />
 </form>

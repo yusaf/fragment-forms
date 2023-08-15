@@ -1,3 +1,9 @@
+import equal from 'fast-deep-equal';
+import structuredClone from '@ungap/structured-clone';
+if (!('structuredClone' in globalThis)) {
+	//@ts-ignore
+	globalThis.structuredClone = structuredClone;
+}
 type Primitive = string | number | boolean | Date;
 type FormElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 type FormElements = FormElement[];
@@ -548,16 +554,194 @@ export function addCoercable<T>(
 	coerceTypeValues[name] = methods.toType;
 }
 
+type FragmentFormOpts = {
+	debounceTimeout?: number;
+};
 export class FragmentForm {
 	public form: HTMLFormElement;
-	constructor(form: HTMLFormElement) {
-		this.form = form;
-	}
-	public attributes = attributes;
+	public listeners: [string, CallableFunction][] = [];
+	public opts: FragmentFormOpts = {
+		debounceTimeout: 500
+	};
 
-	private _addEventListener() {}
+	public valuesToSave: any = {};
+	public valuesToSaveHistory: any = {};
+	public valuesSavedHistory: any = {};
+
+	constructor(form: HTMLFormElement | null, opts?: FragmentFormOpts) {
+		if (!(form instanceof HTMLFormElement)) {
+			throw new Error('form argument must be a HTML Form element');
+		}
+		this.form = form;
+		if (opts) {
+			this.opts = { ...this.opts, ...opts };
+		}
+		return this;
+	}
+	public static attributes = attributes;
+
+	public clear() {
+		this.valuesToSave = {};
+		this.valuesToSaveHistory = {};
+		this.valuesSavedHistory = {};
+		clearForm(this.form);
+		return this;
+	}
+
+	public fill(data: any, clear = true) {
+		if (clear) {
+			this.clear();
+		}
+		fillForm(this.form, data);
+		this._addSaveValues(data);
+		return this;
+	}
+
+	public saved() {
+		this.valuesSavedHistory = extend(this.valuesSavedHistory, this.valuesToSave);
+		this.valuesToSave = {};
+	}
+
+	private _addSaveValues(values: any) {
+		this.valuesToSave = extend(this.valuesToSave, values);
+		this.valuesToSaveHistory = extend(this.valuesToSaveHistory, this.valuesToSave);
+		if (equal(this.valuesSavedHistory, this.valuesToSaveHistory)) {
+			this.valuesToSave = {};
+		}
+	}
+
+	public addEventListener(eventName: string, eventFunction: CallableFunction) {
+		this.form.addEventListener(eventName as any, eventFunction as any);
+		this.listeners.push([eventName, eventFunction]);
+		return this;
+	}
+
+	public fragmentOnInput(callback: CallableFunction) {
+		const _this = this;
+		const make = function () {
+			let lastInput: any = null;
+			const onInput = function (e: InputEvent) {
+				lastInput = e.target;
+			};
+			const _onInputDebounce = function (e: InputEvent) {
+				const input = e.target;
+				const name = input?.name;
+				if (!name) {
+					return;
+				}
+				if (e.type === 'focusout') {
+					if (input === lastInput) {
+						clearDebounce();
+					} else {
+						return;
+					}
+				}
+				lastInput = null;
+
+				const path = nameToPath(name);
+
+				const data = formToJSON(
+					_this.form.querySelectorAll(`[name="${name}"], ${alwaysSelectors(path)}`)
+				);
+				_this._addSaveValues(data);
+				callback(_this.valuesToSave, data);
+			};
+
+			const [onInputDebounce, clearDebounce] = debounce(
+				_onInputDebounce,
+				_this.opts.debounceTimeout
+			);
+
+			return {
+				onInput,
+				onInputDebounce,
+				onFocusout: _onInputDebounce
+			};
+		};
+
+		const listeners = make();
+
+		this.addEventListener('input', listeners.onInput);
+		this.addEventListener('input', listeners.onInputDebounce);
+		this.addEventListener('focusout', listeners.onFocusout);
+	}
+
+	public destory() {
+		for (let i = 0, iLen = this.listeners.length; i < iLen; i++) {
+			this.form.removeEventListener(this.listeners[i][0] as any, this.listeners[i][1] as any);
+		}
+	}
 }
 // known issues
 // attrs function SSR won't add value attribute to select option - issue lies with svelte
 // 1. manually add value
 // 2. OR run fill, but will only work if user has JS enabled
+
+function debounce(
+	func: (ev: InputEvent) => any,
+	timeout: number = 500
+): [(e: Event) => any, () => any] {
+	let timer: any;
+	return [
+		function (e: Event) {
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				func(e);
+			}, timeout);
+		},
+		() => {
+			clearTimeout(timer);
+		}
+	];
+}
+
+const alwaysPrefix = '_$';
+function alwaysSelectors(path: string[]) {
+	const selectors: string[] = [alwaysPrefix];
+	let currentSelector = '';
+	for (let i = 0, iLen = path.length; i < iLen; i++) {
+		const last = i === iLen - 1;
+		const secondToLast = i === iLen - 2;
+		const key = path[i];
+		if (last) {
+			break;
+		}
+		if (secondToLast && path?.[i + 1] === '') {
+			break;
+		}
+		if (isNaN(key as any as number)) {
+			currentSelector += `${i === 0 ? '' : '.'}${key}`;
+			selectors.push(`${currentSelector}.${alwaysPrefix}`);
+		} else {
+			currentSelector += `[${key}]`;
+			selectors.push(`${currentSelector}.${alwaysPrefix}`);
+		}
+	}
+	return `[name^="` + selectors.join(`"], [name^="`) + `"]`;
+}
+
+function extend(target: any, source: any, first = true) {
+	if (first) {
+		target = structuredClone(target);
+		source = structuredClone(source);
+	}
+	for (let key in source) {
+		const sourceChild = source[key];
+
+		if (!target.hasOwnProperty(key)) {
+			target[key] = sourceChild;
+			continue;
+		}
+
+		const isArray = Array.isArray(sourceChild);
+		const allStringsArray = isArray ? sourceChild.every((s) => typeof s === 'string') : false;
+
+		if (typeof sourceChild === 'object' && !allStringsArray) {
+			target[key] = extend(target[key], sourceChild, false);
+			continue;
+		}
+
+		target[key] = sourceChild;
+	}
+	return target;
+}
