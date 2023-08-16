@@ -589,6 +589,11 @@ export class FragmentForm<T extends JSONData = {}> {
 			throw new Error('form argument must be a HTML Form element');
 		}
 		this.form = form;
+
+		const formValues = formToJSON(this.form);
+		this.valuesToSaveHistory = formValues;
+		this.valuesSavedHistory = formValues;
+
 		if (opts) {
 			this.opts = { ...this.opts, ...opts };
 		}
@@ -637,10 +642,19 @@ export class FragmentForm<T extends JSONData = {}> {
 		if (clear) {
 			this.clear();
 		}
+		const lastSavedHistory = structuredClone(this.valuesSavedHistory);
 		this.valuesToSave = extend(this.valuesToSave, data);
 		this.valuesToSaveHistory = extend(this.valuesToSaveHistory, data);
 		this.valuesSavedHistory = extend(this.valuesSavedHistory, data);
 		fillForm(this.form, data);
+		if (equal(lastSavedHistory, this.valuesSavedHistory)) {
+			this._setSaveStatus(false);
+			this.clearAutoSaveDebounce();
+			this.valuesToSave = {};
+		} else {
+			this._setSaveStatus(true);
+			this._startAutosaveTimer();
+		}
 		return this;
 	}
 
@@ -676,7 +690,6 @@ export class FragmentForm<T extends JSONData = {}> {
 	}
 
 	private _cancelAutoSaveTimer() {
-		this.autoSaveTimerCurrentNumber = this.autoSaveTimerStartNumber;
 		clearInterval(this.autoSaveNumberTimer);
 	}
 
@@ -712,24 +725,31 @@ export class FragmentForm<T extends JSONData = {}> {
 		this.autoSaveNumberTimerCallback = callback;
 	}
 
+	private _startAutosaveTimer() {
+		this.autoSaveTimerCurrentNumber = this.autoSaveTimerStartNumber;
+		const _this = this;
+		const autoSaveNumberTimerCallback = _this.autoSaveNumberTimerCallback;
+		if (autoSaveNumberTimerCallback) {
+			this.autoSaveNumberTimer = setInterval(function () {
+				autoSaveNumberTimerCallback(_this.autoSaveTimerCurrentNumber--);
+				if (_this.autoSaveTimerCurrentNumber === -1) {
+					_this._cancelAutoSaveTimer();
+				}
+			}, 1000);
+		}
+	}
+
 	private _commitToSaveValues(values: any) {
 		this.valuesToSave = extend(this.valuesToSave, values);
 		this.valuesToSaveHistory = extend(this.valuesToSaveHistory, this.valuesToSave);
+
 		if (equal(this.valuesSavedHistory, this.valuesToSaveHistory)) {
 			this._setSaveStatus(false);
 			this.clearAutoSaveDebounce();
 			this.valuesToSave = {};
 		} //
 		else if (this.autoSaveCallback) {
-			const _this = this;
-			if (_this.autoSaveNumberTimerCallback) {
-				this.autoSaveNumberTimer = setInterval(function () {
-					_this.autoSaveNumberTimerCallback(_this.autoSaveTimerCurrentNumber--);
-					if (_this.autoSaveTimerCurrentNumber === -1) {
-						_this._cancelAutoSaveTimer();
-					}
-				}, 1000);
-			}
+			this._startAutosaveTimer();
 			this.autoSaveCallback(this.valuesToSave);
 			this._setSaveStatus(true);
 		}
@@ -770,10 +790,8 @@ export class FragmentForm<T extends JSONData = {}> {
 			}
 			lastInput = null;
 
-			const path = nameToPath(name);
-
 			const data = formToJSON(
-				_this.form.querySelectorAll(`[name="${name}"], ${alwaysSelectors(path)}`)
+				_this.form.querySelectorAll(`[name="${name}"], ${alwaysSelectors(name)}`)
 			);
 			callback(data, function () {
 				_this._commitToSaveValues(data);
@@ -815,7 +833,8 @@ function debounce(
 }
 
 const alwaysPrefix = '_$';
-function alwaysSelectors(path: string[]) {
+function alwaysSelectors(name: string) {
+	const path = nameToPath(name);
 	const selectors: string[] = [alwaysPrefix];
 	let currentSelector = '';
 	for (let i = 0, iLen = path.length; i < iLen; i++) {
@@ -853,10 +872,18 @@ function extend(target: any, source: any, first = true) {
 			continue;
 		}
 
-		const isArray = Array.isArray(sourceChild);
-		const allStringsArray = isArray ? sourceChild.every((s) => typeof s === 'string') : false;
+		const isDate = sourceChild instanceof Date;
+		const isArray = isDate ? false : Array.isArray(sourceChild);
+		const allPrimitiveArray = isArray
+			? sourceChild.every((s: unknown) => {
+					if (typeof s === 'object' && !(s instanceof Date)) {
+						return false;
+					}
+					return true;
+			  })
+			: false;
 
-		if (typeof sourceChild === 'object' && !allStringsArray) {
+		if (typeof sourceChild === 'object' && !isDate && !allPrimitiveArray) {
 			target[key] = extend(target[key], sourceChild, false);
 			continue;
 		}

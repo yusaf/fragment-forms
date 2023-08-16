@@ -20,11 +20,14 @@
 			}
 		});
 
-		response.then(async function (response) {
-			console.log(await response.json());
-			FF.saveSuccess();
-			FF.enableAll();
-		});
+		response
+			.then(async function (response) {
+				console.log(await response.json());
+				FF.saveSuccess();
+			})
+			.catch(function () {
+				FF.saveFinally();
+			});
 	}
 
 	const canSave = writable(false);
@@ -36,6 +39,7 @@
 			autosaveTimeout: 4000
 		});
 		FF.autoSaveTimer(function (secondsRemaining) {
+			console.log(secondsRemaining);
 			autoSaveCounter.set(secondsRemaining);
 		});
 		FF.autoSave(function (fragment: any) {
