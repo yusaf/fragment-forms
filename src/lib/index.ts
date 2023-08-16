@@ -27,10 +27,9 @@ export function formToJSON<T extends JSONData>(
 	element: FormData | NodeListOf<Element> | HTMLFormElement | null | undefined
 ): T {
 	if (!element) {
-		console.warn(
+		throw new Error(
 			'The toJSON argument must be either be FormData, a  HTML form element, or a list of input, select or textarea elements.'
 		);
-		return;
 	}
 
 	const entries = toEntries(element);
@@ -175,7 +174,7 @@ export function attributes(data: JSONData | null = null) {
 		}
 
 		let nodeName: string;
-		if (inputTypes.includes(type)) {
+		if (inputTypes.includes(type as any)) {
 			nodeName = 'input';
 			attrs.type = type;
 		} else {
@@ -233,9 +232,6 @@ export function attributes(data: JSONData | null = null) {
 					attrName = 'selected';
 					attrValue = value === defaultValue;
 				} else {
-					if (altName === 'password') {
-						console.log('pass', value);
-					}
 					attrName = 'value';
 					attrValue = value;
 				}
@@ -554,21 +550,41 @@ export function addCoercable<T>(
 	coerceTypeValues[name] = methods.toType;
 }
 
-type FragmentFormOpts = {
+type FragmentFormArgOpts = {
 	debounceTimeout?: number;
+	autosaveTimeout?: number;
 };
-export class FragmentForm {
-	public form: HTMLFormElement;
-	public listeners: [string, CallableFunction][] = [];
-	public opts: FragmentFormOpts = {
-		debounceTimeout: 500
+type FragmentFormOpts = {
+	debounceTimeout: number;
+	autosaveTimeout: number;
+};
+export class FragmentForm<T extends JSONData = {}> {
+	private form: HTMLFormElement;
+	private listeners: [string, CallableFunction][] = [];
+	private opts: FragmentFormOpts = {
+		debounceTimeout: 500,
+		autosaveTimeout: 0
 	};
 
-	public valuesToSave: any = {};
-	public valuesToSaveHistory: any = {};
-	public valuesSavedHistory: any = {};
+	private fragmentOnInputAlready: boolean = false;
+	private autoSaveCallbackAlready: boolean = false;
+	private autoSaveTimerAlready: boolean = false;
 
-	constructor(form: HTMLFormElement | null, opts?: FragmentFormOpts) {
+	private valuesToSave: any = {};
+	private valuesToSaveHistory: any = {};
+	private valuesSavedHistory: any = {};
+
+	private autoSaveTimerStartNumber: number = 0;
+	private autoSaveTimerCurrentNumber: number = 0;
+	private autoSaveNumberTimer: any;
+	private autoSaveNumberTimerCallback?: (timeRemaining: number) => void;
+
+	private autoSaveCallback?: (value: T) => void;
+	private clearAutoSaveDebounce: () => void = () => {};
+
+	private saveStatusCallback?: (enabled: boolean) => void;
+
+	constructor(form: HTMLFormElement | null, opts?: FragmentFormArgOpts) {
 		if (!(form instanceof HTMLFormElement)) {
 			throw new Error('form argument must be a HTML Form element');
 		}
@@ -576,15 +592,44 @@ export class FragmentForm {
 		if (opts) {
 			this.opts = { ...this.opts, ...opts };
 		}
+		if (this.opts.autosaveTimeout) {
+			if (this.opts.autosaveTimeout <= this.opts.debounceTimeout) {
+				throw new Error(
+					'Autosave timer should be 0 (disabled) or a number greater than the debounceTimeout'
+				);
+			}
+			this.autoSaveTimerStartNumber = this.opts.autosaveTimeout
+				? Math.floor((this.opts.autosaveTimeout - this.opts.debounceTimeout) / 1000)
+				: 0;
+		}
+
 		return this;
 	}
 	public static attributes = attributes;
+
+	private _disable(disable: boolean) {
+		const inputs = this.form.querySelectorAll(
+			'input, textarea, select, button'
+		) as any as FormElements;
+		for (let i = 0, iLen = inputs.length; i < iLen; i++) {
+			inputs[i].disabled = disable;
+		}
+		return this;
+	}
+
+	public disableAll() {
+		return this._disable(true);
+	}
+	public enableAll() {
+		return this._disable(false);
+	}
 
 	public clear() {
 		this.valuesToSave = {};
 		this.valuesToSaveHistory = {};
 		this.valuesSavedHistory = {};
 		clearForm(this.form);
+		this._setSaveStatus(false);
 		return this;
 	}
 
@@ -592,21 +637,101 @@ export class FragmentForm {
 		if (clear) {
 			this.clear();
 		}
+		this.valuesToSave = extend(this.valuesToSave, data);
+		this.valuesToSaveHistory = extend(this.valuesToSaveHistory, data);
+		this.valuesSavedHistory = extend(this.valuesSavedHistory, data);
 		fillForm(this.form, data);
-		this._addSaveValues(data);
 		return this;
 	}
 
-	public saved() {
+	public saveSuccess() {
 		this.valuesSavedHistory = extend(this.valuesSavedHistory, this.valuesToSave);
 		this.valuesToSave = {};
+		this._setSaveStatus(false);
+		this.enableAll();
+		return this;
 	}
 
-	private _addSaveValues(values: any) {
+	public saveFinally() {
+		this.enableAll();
+		return this;
+	}
+
+	public saveStatus(callback: (enabled: boolean) => void) {
+		this.saveStatusCallback = callback;
+		return this;
+	}
+
+	private _setSaveStatus(status: boolean) {
+		if (this.saveStatusCallback) {
+			this.saveStatusCallback(status);
+		}
+		return this;
+	}
+
+	public cancelSave() {
+		this._setSaveStatus(false);
+		this.clearAutoSaveDebounce();
+		return this;
+	}
+
+	private _cancelAutoSaveTimer() {
+		this.autoSaveTimerCurrentNumber = this.autoSaveTimerStartNumber;
+		clearInterval(this.autoSaveNumberTimer);
+	}
+
+	public saveStart() {
+		this.disableAll();
+		this.cancelSave();
+		return this;
+	}
+
+	public autoSave(callback: (value: T) => void) {
+		if (this.fragmentOnInputAlready) {
+			throw new Error('.autoSave() callback must be initialized before framentOnInput');
+		}
+		if (this.autoSaveCallbackAlready) {
+			throw new Error(
+				'.fragmentOnInput() is not reusable and cannot be initialized more than once'
+			);
+		}
+		if (!this.opts.autosaveTimeout) {
+			throw new Error(`.autoSave(), you need to specify a number for the option "autosaveTimeout"`);
+		}
+		this.autoSaveCallbackAlready = true;
+		const [autoSaveDebounce, clearAutoSaveDebounce] = debounce(callback, this.opts.autosaveTimeout);
+		this.autoSaveCallback = autoSaveDebounce;
+		this.clearAutoSaveDebounce = clearAutoSaveDebounce;
+	}
+
+	public autoSaveTimer(callback: (timeRemaining: number) => void) {
+		if (this.autoSaveTimerAlready) {
+			throw new Error('.autoSaveTimer() is not reusable and cannot be initialized more than once');
+		}
+		this.autoSaveTimerAlready = true;
+		this.autoSaveNumberTimerCallback = callback;
+	}
+
+	private _commitToSaveValues(values: any) {
 		this.valuesToSave = extend(this.valuesToSave, values);
 		this.valuesToSaveHistory = extend(this.valuesToSaveHistory, this.valuesToSave);
 		if (equal(this.valuesSavedHistory, this.valuesToSaveHistory)) {
+			this._setSaveStatus(false);
+			this.clearAutoSaveDebounce();
 			this.valuesToSave = {};
+		} //
+		else if (this.autoSaveCallback) {
+			const _this = this;
+			if (_this.autoSaveNumberTimerCallback) {
+				this.autoSaveNumberTimer = setInterval(function () {
+					_this.autoSaveNumberTimerCallback(_this.autoSaveTimerCurrentNumber--);
+					if (_this.autoSaveTimerCurrentNumber === -1) {
+						_this._cancelAutoSaveTimer();
+					}
+				}, 1000);
+			}
+			this.autoSaveCallback(this.valuesToSave);
+			this._setSaveStatus(true);
 		}
 	}
 
@@ -617,76 +742,70 @@ export class FragmentForm {
 	}
 
 	public fragmentOnInput(callback: CallableFunction) {
+		if (this.fragmentOnInputAlready) {
+			throw new Error(
+				'.fragmentOnInput() is not reusable and cannot be initialized more than once'
+			);
+		}
+		this.fragmentOnInputAlready = true;
 		const _this = this;
-		const make = function () {
-			let lastInput: any = null;
-			const onInput = function (e: InputEvent) {
-				lastInput = e.target;
-			};
-			const _onInputDebounce = function (e: InputEvent) {
-				const input = e.target;
-				const name = input?.name;
-				if (!name) {
+		let lastInput: any = null;
+		const onInput = function (e: InputEvent) {
+			_this._setSaveStatus(false);
+			_this._cancelAutoSaveTimer();
+			lastInput = e.target;
+		};
+		const _onInputDebounce = function (e: InputEvent) {
+			const input = e.target as FormElement;
+			const name = input?.name;
+			if (!name) {
+				return;
+			}
+			if (e.type === 'focusout') {
+				if (input === lastInput) {
+					clearDebounce();
+				} else {
 					return;
 				}
-				if (e.type === 'focusout') {
-					if (input === lastInput) {
-						clearDebounce();
-					} else {
-						return;
-					}
-				}
-				lastInput = null;
+			}
+			lastInput = null;
 
-				const path = nameToPath(name);
+			const path = nameToPath(name);
 
-				const data = formToJSON(
-					_this.form.querySelectorAll(`[name="${name}"], ${alwaysSelectors(path)}`)
-				);
-				_this._addSaveValues(data);
-				callback(_this.valuesToSave, data);
-			};
-
-			const [onInputDebounce, clearDebounce] = debounce(
-				_onInputDebounce,
-				_this.opts.debounceTimeout
+			const data = formToJSON(
+				_this.form.querySelectorAll(`[name="${name}"], ${alwaysSelectors(path)}`)
 			);
-
-			return {
-				onInput,
-				onInputDebounce,
-				onFocusout: _onInputDebounce
-			};
+			callback(data, function () {
+				_this._commitToSaveValues(data);
+			});
 		};
 
-		const listeners = make();
+		const [onInputDebounce, clearDebounce] = debounce(_onInputDebounce, _this.opts.debounceTimeout);
 
-		this.addEventListener('input', listeners.onInput);
-		this.addEventListener('input', listeners.onInputDebounce);
-		this.addEventListener('focusout', listeners.onFocusout);
+		this.addEventListener('input', onInput);
+		this.addEventListener('input', onInputDebounce);
+		this.addEventListener('focusout', _onInputDebounce);
 	}
 
-	public destory() {
+	public destroy() {
+		this._cancelAutoSaveTimer();
+		this.clearAutoSaveDebounce();
 		for (let i = 0, iLen = this.listeners.length; i < iLen; i++) {
 			this.form.removeEventListener(this.listeners[i][0] as any, this.listeners[i][1] as any);
 		}
 	}
 }
-// known issues
-// attrs function SSR won't add value attribute to select option - issue lies with svelte
-// 1. manually add value
-// 2. OR run fill, but will only work if user has JS enabled
 
 function debounce(
-	func: (ev: InputEvent) => any,
+	func: (...args: any) => any,
 	timeout: number = 500
-): [(e: Event) => any, () => any] {
+): [(...args: any) => void, () => void] {
 	let timer: any;
 	return [
-		function (e: Event) {
+		function (...args: any) {
 			clearTimeout(timer);
 			timer = setTimeout(() => {
-				func(e);
+				func(...args);
 			}, timeout);
 		},
 		() => {
@@ -713,6 +832,7 @@ function alwaysSelectors(path: string[]) {
 			currentSelector += `${i === 0 ? '' : '.'}${key}`;
 			selectors.push(`${currentSelector}.${alwaysPrefix}`);
 		} else {
+			selectors.push(`${currentSelector}_$[`);
 			currentSelector += `[${key}]`;
 			selectors.push(`${currentSelector}.${alwaysPrefix}`);
 		}
@@ -745,3 +865,8 @@ function extend(target: any, source: any, first = true) {
 	}
 	return target;
 }
+
+// known issues
+// attrs function SSR won't add value attribute to select option - issue lies with svelte
+// 1. manually add value
+// 2. OR run fill, but will only work if user has JS enabled

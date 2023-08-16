@@ -1,15 +1,52 @@
 <script lang="ts">
 	import { FragmentForm } from 'fragment-forms';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	export let form;
 
+	//For progressive enhancment, if error in form we can refill previously submitted values
 	let attrs = FragmentForm.attributes(form);
 
+	let FF: FragmentForm;
 	onMount(function () {
-		const fragment = new FragmentForm(document.querySelector('form'));
-		fragment.fragmentOnInput(function (value: any) {
-			console.log(value);
+		FF = new FragmentForm(document.querySelector('form'), {
+			autosaveTimeout: 10000
 		});
+
+		//autosaveTimeout is 10,000,
+		//So every second for 10 seconds this function is called with time left
+		FF.autoSaveTimer(function (secondsRemaining) {
+			console.log(secondsRemaining);
+		});
+
+		//
+		FF.autoSave(function (value: any) {
+			console.log(value);
+			FF.saved();
+		});
+
+		FF.saveStatus(function (enabled) {
+			if (enabled) {
+				console.log('Save enabled');
+			} else {
+				console.log('Save disabled');
+			}
+		});
+
+		FF.fragmentOnInput(function (value: any, commit: CallableFunction) {
+			//optionally do front end validation, then commit
+			//for e.g. we'll just assume the data is valid and commit
+			if (true) {
+				commit(); //commit the changes
+			} else {
+				FF.cancelSave(); // we found an error, disable saving
+			}
+			// console.log(fragment);
+		});
+	});
+	onDestroy(function () {
+		if (FF) {
+			FF.destroy();
+		}
 	});
 </script>
 
@@ -64,12 +101,16 @@
 	</select><br />
 	Agree:<input {...attrs('do.you.agree(boolean)', 'checkbox', true)} /><br />
 
-	<input {...attrs('one._$id', 'hidden', 'helllo')} /><br />
-	<input {...attrs('one[1]._$id', 'hidden', 'helllo 2')} /><br />
 	<br /><br />
-	Labels<br />
-	Label 1:<input {...attrs('one[1].value[]', 'text')} /><br />
-	Label 2:<input {...attrs('one[1].value[]', 'text')} /><br />
-	Label 3:<input {...attrs('one[1].value[]', 'text')} /><br />
+	Labels 1<br />
+	<input {...attrs('labels_$[0]._$id', 'hidden', 'labels 1')} /><br />
+	Label 1:<input {...attrs('labels_$[0].value[]', 'text')} /><br />
+	Label 2:<input {...attrs('labels_$[0].value[]', 'text')} /><br />
+	Label 3:<input {...attrs('labels_$[0].value[]', 'text')} /><br />
+	Labels 2<br />
+	<input {...attrs('labels_$[1]._$id', 'hidden', 'labels 2')} /><br />
+	Label 2.1:<input {...attrs('labels_$[1].value[]', 'text')} /><br />
+	Label 2.2:<input {...attrs('labels_$[1].value[]', 'text')} /><br />
+	Label 2.3:<input {...attrs('labels_$[1].value[]', 'text')} /><br />
 	<input type="submit" />
 </form>
