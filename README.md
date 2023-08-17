@@ -260,7 +260,7 @@ const fragment = {
 
 
 ## Backend usage
-The `POST` function is just for demonstartive purposes \
+The `POST` function is just for demonstrative purposes \
 Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
 
 
@@ -280,7 +280,6 @@ async function POST(request){
 In this example we are using superjson \
 Feel free to use any other applicable library 
 ```js
-import { formToJSON } from 'fragment-forms';
 import superjson from 'superjson';
 
 async function POST(request){
@@ -295,7 +294,6 @@ async function POST(request){
 In this example we are using superjson \
 Feel free to use any other applicable library 
 ```js
-import { formToJSON } from 'fragment-forms';
 import superjson from 'superjson';
 
 async function POST(request){
@@ -305,3 +303,5 @@ async function POST(request){
     //Error? -> return error to front end
 }
 ```
+
+## Front end usage
