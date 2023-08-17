@@ -1,6 +1,6 @@
 # Fragment Forms 
 
-Fragment forms **is framework agnostic** and can be used as is, however was designed to be used as a scaffolding to build framework specific libraries.
+Fragment forms **is framework agnostic** and can be used as is, however it was designed to be used as a scaffolding to build framework specific libraries.
 
 Fragment forms is a new approach to form handling by taking advantage of the name attribute with a few naming conventions! 
 
@@ -255,5 +255,53 @@ const fragment = {
         sex:"female"
     }
    ]
+}
+```
+
+
+## Backend usage
+The `POST` function is just for demonstartive purposes \
+Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
+
+
+### Form submission (progressive enhancement / JS disabled)
+```js
+import { formToJSON } from 'fragment-forms';
+
+async function POST(request){
+    const formData = await request.formData();
+    const data = formToJSON(formData);
+    //Validate data -> data ok -> save to db
+    //Error? -> return error to front end
+}
+```
+
+### Form submission (from front end / JS enabled)
+In this example we are using superjson \
+Feel free to use any other applicable library 
+```js
+import { formToJSON } from 'fragment-forms';
+import superjson from 'superjson';
+
+async function POST(request){
+	const formText = await request.text();
+	const data = superjson.parse(formText);
+    //Validate data -> data ok -> save to db
+    //Error? -> return error to front end
+}
+```
+
+### Fragment  (from front end / JS enabled)
+In this example we are using superjson \
+Feel free to use any other applicable library 
+```js
+import { formToJSON } from 'fragment-forms';
+import superjson from 'superjson';
+
+async function POST(request){
+	const fragmentText = await request.text();
+	const fragment = superjson.parse(fragmentText);
+    //Validate fragment -> fragment ok -> update in db
+    //Error? -> return error to front end
 }
 ```

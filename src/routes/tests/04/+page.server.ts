@@ -18,9 +18,10 @@ let saved = {
 
 export const actions = {
 	default: async ({ request }) => {
+		console.log(request);
+		console.log('HERE DEFAULT');
 		const formData = await request.formData();
 		const data = formToJSON(formData);
-		console.log(data);
 		delete data.password;
 		return data;
 	}

@@ -3,6 +3,7 @@
 	import { FragmentForm } from 'fragment-forms';
 	import { onDestroy, onMount } from 'svelte';
 	import { writable } from 'svelte/store';
+	import { enhance } from '$app/forms';
 	export let form;
 	export let data;
 
@@ -13,7 +14,7 @@
 
 	function save(fragment: any) {
 		FF.saveStart();
-		const response = fetch('/tests/04', {
+		const response = fetch('/tests/04?default', {
 			method: 'POST',
 			body: superjson.stringify(fragment),
 			headers: {
@@ -64,7 +65,7 @@
 	});
 </script>
 
-<form method="POST">
+<form method="POST" use:enhance>
 	<input {...attrs('_$id', 'hidden')} /><br />
 	<br />
 	Name:<br />
