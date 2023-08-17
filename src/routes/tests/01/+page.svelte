@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formToJSON, fillForm, clearForm, attr } from 'fragment-forms';
+	import { formToJSON, fillForm, clearForm, attributes as attr } from 'fragment-forms';
 	import { onMount } from 'svelte';
 	export let form;
 

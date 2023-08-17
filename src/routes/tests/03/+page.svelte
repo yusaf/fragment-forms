@@ -103,14 +103,14 @@
 
 	<br /><br />
 	Labels 1<br />
-	<input {...attrs('labels_$[0]._$id', 'hidden', 'labels 1')} /><br />
-	Label 1:<input {...attrs('labels_$[0].value[]', 'text')} /><br />
-	Label 2:<input {...attrs('labels_$[0].value[]', 'text')} /><br />
-	Label 3:<input {...attrs('labels_$[0].value[]', 'text')} /><br />
+	<input {...attrs('olabels_$[0]._$id', 'hidden', 'labels 1')} /><br />
+	Label 1:<input {...attrs('olabels_$[0].value[]', 'text')} /><br />
+	Label 2:<input {...attrs('olabels_$[0].value[]', 'text')} /><br />
+	Label 3:<input {...attrs('olabels_$[0].value[]', 'text')} /><br />
 	Labels 2<br />
-	<input {...attrs('labels_$[1]._$id', 'hidden', 'labels 2')} /><br />
-	Label 2.1:<input {...attrs('labels_$[1].value[]', 'text')} /><br />
-	Label 2.2:<input {...attrs('labels_$[1].value[]', 'text')} /><br />
-	Label 2.3:<input {...attrs('labels_$[1].value[]', 'text')} /><br />
+	<input {...attrs('olabels_$[1]._$id', 'hidden', 'labels 2')} /><br />
+	Label 2.1:<input {...attrs('olabels_$[1].value[]', 'text')} /><br />
+	Label 2.2:<input {...attrs('olabels_$[1].value[]', 'text')} /><br />
+	Label 2.3:<input {...attrs('olabels_$[1].value[]', 'text')} /><br />
 	<input type="submit" />
 </form>

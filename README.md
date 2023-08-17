@@ -1,58 +1,258 @@
-# create-svelte
+# Fragment Forms
 
-Everything you need to build a Svelte library, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
+Fragment forms is a new approach to form handling by taking advantage of the name attribute with a few naming conventions! 
 
-Read more about creating a library [in the docs](https://kit.svelte.dev/docs/packaging).
+Fragment forms offers:
+- Form submissions - with support for progressive enhancement and form re-population.
+- FormData to object with types coerced -  FormData is converted to an object with types coersed to `numbers`, `booleans` and `date`.
+- Autosaving form changes - changes are only saved when there's an **ACTUAL** change to the form.
+- Form change fragments - only the fields that changed get submitted and not the entire form.
+- Form change fragments bundling - all field changes within a specified timeframe are bundled together so only 1 request is made with all the changes.
 
-## Creating a project
+Fragment forms is framework agnostic and can be used as is, however was designed to be used as a scaffolding to build framework specific libraries.
 
-If you're seeing this, you've probably already done this step. Congrats!
 
-```bash
-# create a new project in the current directory
-npm create svelte@latest
+## Naming conventions
+Fragment forms knows how to structure your data into an object and what types to coerce to using the `[name]` attribute's value
 
-# create a new project in my-app
-npm create svelte@latest my-app
+### Objects
+
+Creating objects is easy, nested poperties are created by using `.` (dot).
+
+e.g. the following form
+```html
+<form method="POST">
+    First name:<input name="name.first"><br>
+    Last name:<input name="name.last"><br>
+    <input type="submit">
+</form>
 ```
 
-## Developing
+is converted on the backend to
+```js
+import { formToJSON } from 'fragment-forms';
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+async function POST(request){
+    const formData = await request.formData();
+    const data = formToJSON(formData);
 
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+    // below is an example for the const data 
+    const data = {
+        name: {
+            first:"Yusaf",
+            last:"Khaliq"
+        }
+    }
+}
 ```
 
-Everything inside `src/lib` is part of your library, everything inside `src/routes` can be used as a showcase or preview app.
+### Types
 
-## Building
+For a field to be coerced to a specific type you need to add the `(type)` onto the end of the name in brackets e.g. `name="agree(boolean)"`
+```html
+<form method="POST">
+    First name:<input name="name.first"><br>
+    Last name:<input name="name.last"><br>
+    Age: <input name="age(number)" type="number"><br>
+    Date of birth <input name="dob(date)" type="date"><br>
+    Date and time of birth: <input name="dobat(dateTime)" type="datetime-local"><br>
+    Agree to storing your data: <input name="agree(boolean)" type="checkbox" value="1"><br>
+    <input type="submit">
+</form>
+```
+```js
+// below is an example for the const data 
+const data = {
+    name:{
+        first:"Yusaf", //By default all name's without a type are assumed to be (string)
+        last:"Khaliq"
+    },
+    age: 20, // (number) will convert to a number or NaN if the value is not a number
+    dob: Date, // '1990-01-01T00:00:00.000Z' (date) will always have time 00:00
+    dobat: Date // '1990-01-101T19:09:33.000Z' (dateTime) will also include time
+    agree: true // A value of "0" is considered false, anything else is true
+}
+```
+The built in types that are supported include `(string)`, `(boolean)`, `(number)`, `(date)`, `(dateTime)`
 
-To build your library:
+### Arrays
 
-```bash
-npm run package
+Data can be structured in arrays by using square brackets with `[index]`
+
+Stating the `[index]` is required (as shown in the above below) if data within the array is objects
+```html
+<form method="POST">
+	Child 1<br />
+	First name:<input name="children[0].name.first" /><br />
+	Last name:<input name="children[0].name.last" /><br />
+	Sex: Male<input name="children[0].sex" value="male" type="radio" /> Female<input
+		name="children[0].sex"
+		value="female"
+		type="radio"
+	/>
+	<br />
+	Child 2<br />
+	First name:<input name="children[1].name.first" /><br />
+	Last name:<input name="children[1].name.last" /><br />
+	Sex: Male<input name="children[1].sex" value="male" type="radio" /> Female<input
+		name="children[1].sex"
+		value="female"
+		type="radio"
+	/>
+	<br />
+	<input type="submit" />
+</form>
+```
+```js
+// below is an example for the const data 
+const data = {
+   children:[
+    {
+        name: {first:"first", second:"child"},
+        sex:"male"
+    },
+    {
+        name: {first:"second", second:"child"},
+        sex:"female"
+    }
+   ]
+}
 ```
 
-To create a production version of your showcase app:
+**However**, if the arrays is made of all primitive types e.g. `string`, `boolean` etc, then the following is also possible
 
-```bash
-npm run build
+> Note: You can still coerce the types in an array as follows `dates[](date)`
+
+```html
+<form method="POST">
+    Communication preferences:
+    SMS:<input name="commpref[]" type="checkbox" value="SMS"><br>
+    E-Mail:<input name="commpref[]" type="checkbox" value="email"><br>
+    Letter:<input name="commpref[]" type="checkbox" value="letter"><br>
+    <input type="submit">
+</form>
+```
+```js
+// below is an example for the const data 
+const data = {
+   commpref:["SMS", "letter"]
+}
 ```
 
-You can preview the production build with `npm run preview`.
+### Always include `_$`
 
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+When changes are made, only the specific fields that have changed are submitted, but what if we need additional context?
 
-## Publishing
+For e.g. we have the following form populated with exisiting data from a database
 
-Go into the `package.json` and give your package the desired name through the `"name"` option. Also consider adding a `"license"` field and point it to a `LICENSE` file which you can create from a template (one popular option is the [MIT license](https://opensource.org/license/mit/)).
+```html
+<form method="POST">
+	Child 1 <input name="children[0].id" value="child-1-random-uuid" type="hidden" /><br />
+	First name:<input name="children[0].name.first" value="Emily" /><br />
+	Last name:<input name="children[0].name.last" value="Brown" /><br />
+	Sex: Male<input name="children[0].sex" value="male" type="radio" /> Female<input
+		name="children[0].sex"
+		value="female"
+		type="radio"
+		checked
+	/>
+	<br />
+	Child 2 <input name="children[1].id" value="child-2-random-uuid" type="hidden" /><br />
+	First name:<input name="children[1].name.first" value="Bobby" /><br />
+	Last name:<input name="children[1].name.last" value="Brown" /><br />
+	Sex: Male<input name="children[1].sex" value="male" type="radio" checked /> Female<input
+		name="children[1].sex"
+		value="female"
+		type="radio"
+	/>
+	<br />
+	<input type="submit" />
+</form>
+```
 
-To publish your library to [npm](https://www.npmjs.com):
+Let's say we change the value of `<input name="children[1].name.last" value="Brown"/>` to `value="Smith"`
 
-```bash
-npm publish
+The fragment would look something like this
+```js
+const fragment = {
+    children:[
+        0:empty,
+        1:{
+            name:{
+                last:"Smith"
+            }
+        }
+    ]
+}
+```
+
+But how do we know exactly which child was updated?
+
+This is where the `_$` always include prefix comes in handy
+
+Now if we add the always include prefix into our hidden input's name attribute changin it from `"children[1].id"` to `name="children[1]._$id"`
+
+The fragment will now look like:
+```js
+const fragment = {
+    children:[
+        0:empty,
+        1:{
+            id: "child-2-random-uuid",
+            name:{
+                last:"Smith"
+            }
+        }
+    ]
+}
+```
+
+The always prefix will include all prefixed properties on direct ancestors in the fragment when prefixed with `_$`. \
+It is also possible to include entire arrays by prefixing the square brackets like `_$[index]` \
+
+e.g. also added hidden input `"_$parentId"`  that is on a direct ancestor of the children
+
+```html
+<form method="POST">
+    <input name="_$parentId" value="parent-random-uuid" type="hidden" /><br />
+
+	Child 1 <input name="children_$[0].id" value="child-1-random-uuid" type="hidden" /><br />
+	First name:<input name="children_$[0].name.first" value="Emily" /><br />
+	Last name:<input name="children_$[0].name.last" value="Brown" /><br />
+	Sex: Male<input name="children_$[0].sex" value="male" type="radio" /> Female<input
+		name="children_$[0].sex"
+		value="female"
+		type="radio"
+		checked
+	/>
+	<br />
+	Child 2 <input name="children_$[1].id" value="child-2-random-uuid" type="hidden" /><br />
+	First name:<input name="children_$[1].name.first" value="Bobby" /><br />
+	Last name:<input name="children_$[1].name.last" value="Brown" /><br />
+	Sex: Male<input name="children_$[1].sex" value="male" type="radio" checked /> Female<input
+		name="children_$[1].sex"
+		value="female"
+		type="radio"
+	/>
+	<br />
+	<input type="submit" />
+</form>
+```
+When a a single change is made now to any of the children fields the fragment will look like:
+```js
+const fragment = {
+    parentId:"parent-random-uuid",
+    children:[
+    {
+        id: "child-1-random-uuid",
+        name: {first:"Emily", second:"Brown"},
+        sex:"female"
+    },
+    {
+        id: "child-2-random-uuid",
+        name: {first:"Bobby", second:"Smith"},
+        sex:"female"
+    }
+   ]
+}
 ```

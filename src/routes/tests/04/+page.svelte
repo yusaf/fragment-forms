@@ -6,6 +6,7 @@
 	export let form;
 	export let data;
 
+	let saveEl;
 	let attrs = FragmentForm.attributes(form || data);
 
 	let FF: FragmentForm;
@@ -30,7 +31,6 @@
 			});
 	}
 
-	const canSave = writable(false);
 	const autoSaveCounter = writable(0);
 	const saveButton = writable<any>(null);
 
@@ -39,20 +39,20 @@
 			autosaveTimeout: 4000
 		});
 		FF.autoSaveTimer(function (secondsRemaining) {
-			console.log(secondsRemaining);
 			autoSaveCounter.set(secondsRemaining);
 		});
 		FF.autoSave(function (fragment: any) {
 			save(fragment);
 		});
 		FF.saveStatus(function (enabled) {
-			canSave.set(enabled);
+			saveEl.disabled = !enabled;
 		});
 		FF.fragmentOnInput(function (fragment: any, commit: CallableFunction) {
 			if (true) {
 				saveButton.set(() => save(fragment));
 				commit();
 			} else {
+				saveButton.set(() => {});
 				FF.cancelSave();
 			}
 		});
@@ -95,15 +95,27 @@
 	<input {...attrs('user.consent(boolean)', 'radio', true)} /><br />
 	No:
 	<input {...attrs('user.consent(boolean)', 'radio', false)} /><br />
+	<input {...attrs('olabels[0]._$id', 'hidden', 'labels 1')} /><br />
+	Label 1:<input {...attrs('olabels[0].value[]', 'text')} /><br />
+	Label 2:<input {...attrs('olabels[0].value[]', 'text')} /><br />
+	Label 3:<input {...attrs('olabels[0].value[]', 'text')} /><br />
+	Labels 2<br />
+	<input {...attrs('olabels[1]._$id', 'hidden', 'labels 2')} /><br />
+	Label 2.1:<input {...attrs('olabels[1].value[]', 'text')} /><br />
+	Label 2.2:<input {...attrs('olabels[1].value[]', 'text')} /><br />
+	Label 2.3:<input {...attrs('olabels[1].value[]', 'text')} /><br />
 	<input type="submit" />
 
-	{#if $canSave}
-		<input
-			type="submit"
-			on:click|preventDefault={$saveButton}
-			value={$autoSaveCounter ? `Autosaving in ${$autoSaveCounter}` : `Save`}
-		/>
-	{:else}
-		<input type="submit" disabled value="save" />
-	{/if}
+	<input
+		type="submit"
+		on:click|preventDefault={$saveButton}
+		value={$autoSaveCounter ? `Autosaving in ${$autoSaveCounter}` : `Save`}
+		bind:this={saveEl}
+	/>
 </form>
+
+<style>
+	.disabled {
+		pointer-events: none;
+	}
+</style>
