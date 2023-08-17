@@ -1,4 +1,6 @@
-# Fragment Forms
+# Fragment Forms 
+
+Fragment forms **is framework agnostic** and can be used as is, however was designed to be used as a scaffolding to build framework specific libraries.
 
 Fragment forms is a new approach to form handling by taking advantage of the name attribute with a few naming conventions! 
 
@@ -9,7 +11,6 @@ Fragment forms offers:
 - Form change fragments - only the fields that changed get submitted and not the entire form.
 - Form change fragments bundling - all field changes within a specified timeframe are bundled together so only 1 request is made with all the changes.
 
-Fragment forms is framework agnostic and can be used as is, however was designed to be used as a scaffolding to build framework specific libraries.
 
 
 ## Naming conventions
@@ -68,18 +69,18 @@ const data = {
         last:"Khaliq"
     },
     age: 20, // (number) will convert to a number or NaN if the value is not a number
-    dob: Date, // '1990-01-01T00:00:00.000Z' (date) will always have time 00:00
-    dobat: Date // '1990-01-101T19:09:33.000Z' (dateTime) will also include time
-    agree: true // A value of "0" is considered false, anything else is true
+    dob: Date, // '1990-01-01T00:00:00.000Z' (date) will always have time set to 00:00
+    dobat: Date // '1990-01-101T19:09:33.000Z' (dateTime) will always include time
+    agree: true // A value of "0" is considered false, "1" is true
 }
 ```
 The built in types that are supported include `(string)`, `(boolean)`, `(number)`, `(date)`, `(dateTime)`
 
 ### Arrays
 
-Data can be structured in arrays by using square brackets with `[index]`
+Data can be structured into arrays by using square brackets with `[index]`
 
-Stating the `[index]` is required (as shown in the above below) if data within the array is objects
+Stating the `[index]` is required (as shown in the below) if data within the array is objects
 ```html
 <form method="POST">
 	Child 1<br />
@@ -108,20 +109,20 @@ Stating the `[index]` is required (as shown in the above below) if data within t
 const data = {
    children:[
     {
-        name: {first:"first", second:"child"},
+        name: {first:"first", last:"child"},
         sex:"male"
     },
     {
-        name: {first:"second", second:"child"},
+        name: {first:"second", last:"child"},
         sex:"female"
     }
    ]
 }
 ```
 
-**However**, if the arrays is made of all primitive types e.g. `string`, `boolean` etc, then the following is also possible
+**However**, if the arrays is made of all primitive types e.g. `string`, `boolean` etc, then no-index arrays `[]` is also possible
 
-> Note: You can still coerce the types in an array as follows `dates[](date)`
+> Note: You can still coerce the types in no-index array as follows `dates[](date)`
 
 ```html
 <form method="POST">
@@ -139,9 +140,9 @@ const data = {
 }
 ```
 
-### Always include `_$`
+### Always include prefix (`_$`)
 
-When changes are made, only the specific fields that have changed are submitted, but what if we need additional context?
+When changes are made, only the specific fields that have changed are saved, but what if we need additional context to know what changed?
 
 For e.g. we have the following form populated with exisiting data from a database
 
@@ -188,9 +189,9 @@ const fragment = {
 
 But how do we know exactly which child was updated?
 
-This is where the `_$` always include prefix comes in handy
+This is where the always include prefix (`_$`)  comes in handy
 
-Now if we add the always include prefix into our hidden input's name attribute changin it from `"children[1].id"` to `name="children[1]._$id"`
+Now let's add the always include prefix (`_$`) to our hidden input's name, changing from `"children[1].id"` to `name="children[1]._$id"`
 
 The fragment will now look like:
 ```js
@@ -198,7 +199,7 @@ const fragment = {
     children:[
         0:empty,
         1:{
-            id: "child-2-random-uuid",
+            id: "child-2-random-uuid", // we now have an id for context on which child was changed
             name:{
                 last:"Smith"
             }
@@ -207,10 +208,10 @@ const fragment = {
 }
 ```
 
-The always prefix will include all prefixed properties on direct ancestors in the fragment when prefixed with `_$`. \
-It is also possible to include entire arrays by prefixing the square brackets like `_$[index]` \
+The always prefix works for all direct ancestors too! \
+And, it is also possible to include entire arrays by prefixing the square brackets like `_$[index]` \
 
-e.g. also added hidden input `"_$parentId"`  that is on a direct ancestor of the children
+e.g. let's also add a  hidden input with the name `"_$parentId"`.
 
 ```html
 <form method="POST">
@@ -238,19 +239,19 @@ e.g. also added hidden input `"_$parentId"`  that is on a direct ancestor of the
 	<input type="submit" />
 </form>
 ```
-When a a single change is made now to any of the children fields the fragment will look like:
+When a a single change is made now to any of the "children" fields the fragment will look like:
 ```js
 const fragment = {
     parentId:"parent-random-uuid",
     children:[
     {
         id: "child-1-random-uuid",
-        name: {first:"Emily", second:"Brown"},
+        name: {first:"Emily", last:"Brown"},
         sex:"female"
     },
     {
         id: "child-2-random-uuid",
-        name: {first:"Bobby", second:"Smith"},
+        name: {first:"Bobby", last:"Smith"},
         sex:"female"
     }
    ]
