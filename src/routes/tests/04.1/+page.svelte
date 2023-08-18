@@ -6,19 +6,17 @@
 	export let form;
 	export let data;
 
-	let saveEl;
+	let saveEl: HTMLInputElement;
 	let attrs = FragmentForm.attributes(form || data);
 
 	let FF: FragmentForm;
 
-	function save(fragment: any) {
+	function save(fragment: FormData) {
 		FF.saveStart();
-		const response = fetch('/tests/04', {
+
+		const response = fetch('/tests/04.1', {
 			method: 'POST',
-			body: superjson.stringify(fragment),
-			headers: {
-				'Content-Type': 'application/json'
-			}
+			body: fragment
 		});
 
 		response
@@ -41,17 +39,15 @@
 		FF.autoSaveTimer(function (secondsRemaining) {
 			autoSaveCounter.set(secondsRemaining);
 		});
-		FF.autoSave(function (fragment: any) {
-			save(fragment);
+		FF.autoSave(function ({ formData }) {
+			save(formData);
 		});
 		FF.saveStatus(function (enabled) {
 			saveEl.disabled = !enabled;
 		});
-		FF.fragmentOnInput(function ({ data, formData }: any, commit: CallableFunction) {
-			console.log(data);
-			console.log(formData);
+		FF.fragmentOnInput(function ({ formData }, commit) {
 			if (true) {
-				saveButton.set(() => save(data));
+				saveButton.set(() => save(formData));
 				commit();
 			} else {
 				saveButton.set(() => {});

@@ -5,10 +5,7 @@ import {
 	getAltNamesAndTypes,
 	sliceCoerceTypeFromName,
 	coerceTypeValue,
-	nameToPath,
-	modifyEntries,
-	modifiedEntriesToJSON,
-	entriesToFormData
+	nameToPath
 } from './utils.js';
 import { extend, contains, debounce, alwaysSelectors } from './utils.js';
 
@@ -33,12 +30,50 @@ export function formToJSON<T extends JSONData>(
 		throw new Error(
 			'The toJSON argument must be either be FormData, a  HTML form element, or a list of input, select or textarea elements.'
 		);
-		4;
 	}
 
 	const entries = toEntries(element);
-	const data = modifiedEntriesToJSON(modifyEntries(entries));
-	return data as T;
+
+	const data: any = {};
+
+	for (let i = 0, iLen = entries.length; i < iLen; i++) {
+		const [path, value] = entries[i];
+		let target = data;
+		for (let j = 0, jLen = path.length; j < jLen; j++) {
+			const isLast = j === jLen - 1;
+			const key = path[j];
+			const nextKey = path?.[j + 1];
+			let current = target?.[key];
+			if (isLast) {
+				if (key === '') {
+					target.push(value);
+				} else {
+					current = value;
+				}
+			} //
+			else if (current === undefined) {
+				if (!isNaN(nextKey as any as number)) {
+					current = [];
+				} else if (nextKey === '') {
+					current = [];
+				} else if (nextKey !== undefined) {
+					current = {};
+				}
+			}
+			if (key !== '') {
+				if (typeof target !== 'object') {
+					throw new Error(
+						`You are trying to set a property onto a primitive value at the path [${path.join(
+							', '
+						)}]`
+					);
+				}
+				target[key] = current;
+				target = target[key];
+			}
+		}
+	}
+	return data;
 }
 export function fillForm(form: HTMLFormElement | null | undefined, data: JSONData) {
 	if (!form) {
@@ -236,12 +271,6 @@ export function attributes(data: JSONData | null = null) {
 	};
 }
 
-type DeepPartial<T> = T extends object
-	? {
-			[P in keyof T]?: DeepPartial<T[P]>;
-	  }
-	: T;
-
 type FragmentFormArgOpts = {
 	debounceTimeout?: number;
 	autosaveTimeout?: number;
@@ -250,14 +279,6 @@ type FragmentFormOpts = {
 	debounceTimeout: number;
 	autosaveTimeout: number;
 };
-
-type FragmentAutoSaveObj<T extends JSONData> = { data: DeepPartial<T>; formData: FormData };
-
-type FragmentOnInputCallback<T extends JSONData> = (
-	data: FragmentAutoSaveObj<T>,
-	commit: () => void
-) => void;
-
 export class FragmentForm<T extends JSONData = {}> {
 	private form: HTMLFormElement;
 	private listeners: [string, CallableFunction][] = [];
@@ -266,13 +287,10 @@ export class FragmentForm<T extends JSONData = {}> {
 		autosaveTimeout: 0
 	};
 
-	private formDisabled: boolean = false;
-
 	private fragmentOnInputAlready: boolean = false;
 	private autoSaveCallbackAlready: boolean = false;
 	private autoSaveTimerAlready: boolean = false;
 
-	private valuesToSaveFD: FormData = new FormData();
 	private valuesToSave: any = {};
 	private valuesSavedHistory: any = {};
 
@@ -281,7 +299,7 @@ export class FragmentForm<T extends JSONData = {}> {
 	private autoSaveNumberTimer: any;
 	private autoSaveNumberTimerCallback?: (timeRemaining: number) => void;
 
-	private autoSaveCallback?: (data: FragmentAutoSaveObj<T>) => void;
+	private autoSaveCallback?: (value: T) => void;
 	private _clearAutoSaveDebounce: () => void = () => {};
 
 	private saveStatusCallback?: (enabled: boolean) => void;
@@ -324,22 +342,14 @@ export class FragmentForm<T extends JSONData = {}> {
 	}
 
 	public disableAll() {
-		this.formDisabled = true;
 		return this._disable(true);
 	}
 	public enableAll() {
-		this.formDisabled = false;
 		return this._disable(false);
 	}
 
-	private _resetValuesToSave() {
-		this.valuesToSave = {};
-		this.valuesToSaveFD = new FormData();
-	}
-
 	public clear() {
-		this._resetValuesToSave();
-		this._clearAutoSaveDebounce();
+		this.valuesToSave = {};
 		this.valuesSavedHistory = {};
 		this._setSaveStatus(false);
 		clearForm(this.form);
@@ -347,8 +357,19 @@ export class FragmentForm<T extends JSONData = {}> {
 	}
 
 	public fill(data: any, clear = true) {
-		this.clear();
-		this.valuesSavedHistory = data;
+		if (clear) {
+			this.clear();
+		}
+		const lastSavedHistory = structuredClone(this.valuesSavedHistory);
+		this.valuesSavedHistory = extend(this.valuesSavedHistory, data);
+		if (contains(lastSavedHistory, this.valuesSavedHistory)) {
+			this.valuesToSave = {};
+			this._setSaveStatus(false);
+			this._clearAutoSaveDebounce();
+		} else {
+			this.valuesToSave = extend(this.valuesToSave, data);
+			this._startAutosaveTimer();
+		}
 		fillForm(this.form, data);
 		return this;
 	}
@@ -359,9 +380,9 @@ export class FragmentForm<T extends JSONData = {}> {
 		return this;
 	}
 
-	private _setSaveStatus(enabled: boolean) {
+	private _setSaveStatus(status: boolean) {
 		if (this.saveStatusCallback) {
-			this.saveStatusCallback(enabled);
+			this.saveStatusCallback(status);
 		}
 		return this;
 	}
@@ -385,7 +406,7 @@ export class FragmentForm<T extends JSONData = {}> {
 	public saveSuccess() {
 		const _this = this;
 		this.valuesSavedHistory = extend(this.valuesSavedHistory, this.valuesToSave);
-		this._resetValuesToSave();
+		this.valuesToSave = {};
 		this.enableAll();
 		_this._setSaveStatus(false);
 		return this;
@@ -396,20 +417,7 @@ export class FragmentForm<T extends JSONData = {}> {
 		return this;
 	}
 
-	public submitStart = this.saveStart;
-
-	public submitSuccess() {
-		const _this = this;
-		this.valuesSavedHistory = formToJSON(this.form);
-		this._resetValuesToSave();
-		this.enableAll();
-		_this._setSaveStatus(false);
-		return this;
-	}
-
-	public submitFinally = this.saveFinally;
-
-	public autoSave(callback: (data: FragmentAutoSaveObj<T>) => void) {
+	public autoSave(callback: (value: T) => void) {
 		if (this.fragmentOnInputAlready) {
 			throw new Error('.autoSave() callback must be initialized before framentOnInput');
 		}
@@ -454,17 +462,16 @@ export class FragmentForm<T extends JSONData = {}> {
 		this._setSaveStatus(true);
 	}
 
-	private _commitToSaveValues(values: any, formData: FormData) {
+	private _commitToSaveValues(values: any) {
 		this.valuesToSave = extend(this.valuesToSave, values);
-		this.valuesToSaveFD = formData;
 		if (contains(this.valuesSavedHistory, this.valuesToSave)) {
-			this._resetValuesToSave();
+			this.valuesToSave = {};
 			this._setSaveStatus(false);
 			this._clearAutoSaveDebounce();
 		} //
 		else if (this.autoSaveCallback) {
 			this._startAutosaveTimer();
-			this.autoSaveCallback({ data: this.valuesToSave, formData: this.valuesToSaveFD });
+			this.autoSaveCallback(this.valuesToSave);
 		} //
 		else {
 			this._setSaveStatus(true);
@@ -477,7 +484,7 @@ export class FragmentForm<T extends JSONData = {}> {
 		return this;
 	}
 
-	public fragmentOnInput(callback: FragmentOnInputCallback<T>) {
+	public fragmentOnInput(callback: CallableFunction) {
 		if (this.fragmentOnInputAlready) {
 			throw new Error(
 				'.fragmentOnInput() is not reusable and cannot be initialized more than once'
@@ -487,17 +494,11 @@ export class FragmentForm<T extends JSONData = {}> {
 		const _this = this;
 		let lastInput: any = null;
 		const onInput = function (e: InputEvent) {
-			if (_this.formDisabled) {
-				return;
-			}
 			_this._setSaveStatus(false);
 			_this._cancelAutoSaveTimer();
 			lastInput = e.target;
 		};
 		const _onInputDebounce = function (e: InputEvent) {
-			if (_this.formDisabled) {
-				return;
-			}
 			const input = e.target as FormElement;
 			const name = input?.name;
 			if (!name) {
@@ -512,13 +513,11 @@ export class FragmentForm<T extends JSONData = {}> {
 			}
 			lastInput = null;
 
-			const entries = toEntries(
+			const data = formToJSON(
 				_this.form.querySelectorAll(`[name="${name}"], ${alwaysSelectors(name)}`)
 			);
-			const formData = entriesToFormData(entries);
-			const data = modifiedEntriesToJSON(modifyEntries(entries)) as DeepPartial<T>;
-			callback({ data, formData }, function () {
-				_this._commitToSaveValues(data, formData);
+			callback(data, function () {
+				_this._commitToSaveValues(data);
 			});
 		};
 
@@ -530,13 +529,10 @@ export class FragmentForm<T extends JSONData = {}> {
 	}
 
 	public destroy() {
-		this._resetValuesToSave();
 		this._cancelAutoSaveTimer();
 		this._clearAutoSaveDebounce();
-		if (this.form) {
-			for (let i = 0, iLen = this.listeners.length; i < iLen; i++) {
-				this.form.removeEventListener(this.listeners[i][0] as any, this.listeners[i][1] as any);
-			}
+		for (let i = 0, iLen = this.listeners.length; i < iLen; i++) {
+			this.form.removeEventListener(this.listeners[i][0] as any, this.listeners[i][1] as any);
 		}
 	}
 }

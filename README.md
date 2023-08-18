@@ -1,12 +1,12 @@
 # Fragment Forms 
 
-Fragment forms **is framework agnostic** and can be used as is, however it was designed to be used as a scaffolding to build framework specific libraries.
+Fragment forms **is framework agnostic** and can be used as is, however it was designed to be used as scaffolding to build framework specific libraries.
 
-Fragment forms is a new approach to form handling by taking advantage of the name attribute with a few naming conventions! 
+Fragment forms is a new approach to handling forms by taking advantage of the name attribute with a few naming conventions! 
 
 Fragment forms offers:
 - Form submissions - with support for progressive enhancement and form re-population.
-- FormData to object with types coerced -  FormData is converted to an object with types coersed to `numbers`, `booleans` and `date`.
+- FormData to object with types coerced -  FormData is converted to an object with types coerced to `numbers`, `booleans` and `date`.
 - Autosaving form changes - changes are only saved when there's an **ACTUAL** change to the form.
 - Form change fragments - only the fields that changed get submitted and not the entire form.
 - Form change fragments bundling - all field changes within a specified timeframe are bundled together so only 1 request is made with all the changes.
@@ -33,16 +33,10 @@ is converted on the backend to
 ```js
 import { formToJSON } from 'fragment-forms';
 
-async function POST(request){
-    const formData = await request.formData();
-    const data = formToJSON(formData);
-
-    // below is an example for the const data 
-    const data = {
-        name: {
-            first:"Yusaf",
-            last:"Khaliq"
-        }
+const data = /* formToJSON(formData)*/ {
+    name: {
+        first:"Yusaf",
+        last:"Khaliq"
     }
 }
 ```
@@ -208,8 +202,9 @@ const fragment = {
 }
 ```
 
-The always prefix works for all direct ancestors too! \
-And, it is also possible to include entire arrays by prefixing the square brackets like `_$[index]` \
+The always prefix works for all direct ancestors too! 
+
+And, it is also possible to include entire arrays by prefixing the square brackets like `_$[index]` 
 
 e.g. let's also add a  hidden input with the name `"_$parentId"`.
 
@@ -259,12 +254,259 @@ const fragment = {
 ```
 
 
-## Backend usage
+## Frontend usage
+
 The `POST` function is just for demonstrative purposes \
 Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
 
+### Pre-filling attributes
 
-### Form submission (progressive enhancement / JS disabled)
+We first need to create an `attrs` function that will create the attributes for our fields.
+
+`attrs` accepts 3 arguments `name`, `type` and `value/additional attrs`
+- `name` (required) - must be the name of the field using the naming conventions
+- `type` (required) - must be an input type e.g. `"checkbox"` or the elements `select`, `option` and `textarea`
+- `value/additional attrs` (optional)
+  - Value can be the default value for types that aren't user provided e.g. `"checkbox"`, `"radio"`, `"option"`
+  - The value sould also be the coerce type for that field e.g. an input with the name `"agree(boolean)"` the value should be set as `true`
+  - Value can also be and object with key pair values representing attributes you wish to set to the element
+
+#### Empty form
+```js
+import { FragmentForm } from 'fragment-forms';
+const attrs = FragmentForm.attributes();
+```	
+
+#### Form with value population
+```js
+import { FragmentForm } from 'fragment-forms';
+const data = await prefillDataFromDatabase();
+const attrs = FragmentForm.attributes(data);
+```	
+
+#### Attrs usage ( svelte example )
+```svelte
+<form method="POST">
+	<input {...attrs('_$id', 'hidden')} /><br />
+	<br />
+	Username:<br />
+	<input {...attrs('username', 'text')} /><br />
+	<br />
+	Password:<br />
+	<input {...attrs('password', 'password')} /><br />
+	<br />
+	Name:<br />
+	First: <input {...attrs('user.name.first', 'text')} /><br />
+	Second: <input {...attrs('user.name.second', 'text')} /><br />
+	<br />
+	Sex:<br />
+	Male: <input {...attrs('user.sex', 'radio', 'male')} /><br />
+	Female: <input {...attrs('user.sex', 'radio', 'female')} /><br />
+	<br />
+	Date Of Birth:
+	<input {...attrs('user.dob(date)', 'date')} /><br />
+	<br />
+	Interests<br />
+	Sports:<input {...attrs('user.interests[]', 'checkbox', 'sports')} /><br />
+	Politics:<input {...attrs('user.interests[]', 'checkbox', 'politics')} /><br />
+	Finance:<input {...attrs('user.interests[]', 'checkbox', 'finance')} /><br />
+	<br />
+	Contact preferences:<br />
+	<select {...attrs('user.contact[]', 'select')}>
+		<option {...attrs('user.contact[]', 'option', 'sms')}>SMS</option>
+		<option {...attrs('user.contact[]', 'option', 'email')}>E-mail</option>
+		<option {...attrs('user.contact[]', 'option', 'letter')}>Letter</option>
+	</select><br />
+	<br />
+	Consent to share details:<br />
+	Yes:
+	<input {...attrs('user.consent(boolean)', 'radio', true)} /><br />
+	No:
+	<input {...attrs('user.consent(boolean)', 'radio', false)} /><br />
+	<br />
+	Agree:<input {...attrs('do.you.agree(boolean)', 'checkbox', true)} /><br />
+	<input type="submit" />
+</form>
+```
+
+
+### Setting up form submission
+Whilst FF doesn't actually get involved with form submission, we still need to let it know that it's happening.
+
+#### Submitting form as FormData
+```js
+const form = document.querySelector('form')
+function submit() {
+    // Here we are telling FF that we are now attempting to submit the form
+    // This will disable all elements in the form
+    // This will also cancel the autosave timer
+    FF.submitStart(); 
+    
+    const response = fetch('/saveInfo', {
+        method: 'POST',
+        body: new FormData(form)
+    });
+
+    response
+        .then(async function (response) {
+            console.log(await response.json());
+            // Here we tell FF that the submission was successfull
+            // FF will add the changes to the ledger of previous successfull changes
+            // FF will also re-enable all elements
+            FF.submitSuccess();
+        })
+        .catch(function () {
+            // Here we tell FF to re-enable all elements
+            // FF will not add the changes to the ledger of previous changes
+            FF.submitFinally();
+        });
+}
+form.onsubmit = submit;
+```
+
+#### Submitting form as object with types (using superjson)
+```js
+import { formToJSON } from 'fragment-forms';
+import superjson from 'superjson';
+
+const form = document.querySelector('form')
+function submit() {
+    // Here we are telling FF that we are now attempting to submit the form
+    // This will disable all elements in the form
+    // This will also cancel the autosave timer
+    FF.submitStart(); 
+    
+    const response = fetch('/saveInfo', {
+        method: 'POST',
+        body: superjson.stringify( formToJSON(form) )
+    });
+
+    response
+        .then(async function (response) {
+            console.log(await response.json());
+            // Here we tell FF that the submission was successfull
+            // FF will add the changes to the ledger of previous successfull changes
+            // FF will also re-enable all elements
+            FF.submitSuccess();
+        })
+        .catch(function () {
+            // Here we tell FF to re-enable all elements
+            // FF will not add the changes to the ledger of previous changes
+            FF.submitFinally();
+        });
+}
+form.onsubmit = submit;
+```
+
+### Setting up autosave
+```js
+const saveButton = document.querySelect("#save");
+const FF = new FragmentForm(document.querySelector('form'), {
+    debounceTimeout: 500, // Input debouncing, required as we don't want to be running expensive operations on every input event
+    autosaveTimeout: 4000 // 0 (default) disables autosave. this should be a number greater than the option "debounceTimeout"
+});
+FF.autoSaveTimer(function (secondsRemaining) {
+    // This function will be called every second until reaching 0
+    console.log(secondsRemaining) // 4, 3, 2, 1
+});
+FF.autoSave(function ({ data, formData }) {
+    // This function will be called when the timer reaches 0
+    // data is the change as an object with types
+    // formData is the changes as a FormData object
+    // It is completely up to you if you wish to submit as FormData or the objetc (using something like superjson)
+    save(formData);
+});
+FF.saveStatus(function (enabled) {
+    // This function is called whenever there is/isn't any data to be saved
+    // false - nothing to save (disable save button)
+    // true - data to be saved (enable save button)
+    saveButton.disabled = !enabled;
+});
+FF.fragmentOnInput(function ({ data, formData }, commit) {
+    // On each input if autoSave is enabled, the timer is restarted
+    // data is the change as an object with types
+    // formData is the changes as a FormData object
+
+    // It is completely up to you if you wish to submit as FormData or the object (using something like superjson)
+
+    const dataIsValid = validation(data);
+    if (dataIsValid) {
+        commit(); // Here we are letting FF know that the data is OK and to commit it into an internal ledger
+        saveButton.onclick = () => save(formData); // If the user wishes to save before the save timer they can
+    } else {
+        FF.cancelSave(); //Here we are telling FF that the data is erroneous and to cancel autosave
+        saveButton.onclick = null // removing onclick listener
+    }
+});
+
+function save(fragment: FormData) {
+    // Here we are telling FF that we are now attempting to save the changes
+    // This will disable all elements in the form
+    // This will also cancel the autosave timer
+    FF.saveStart(); 
+    
+    const response = fetch('/updateInfo', {
+        method: 'POST',
+        body: fragment
+    });
+
+    response
+        .then(async function (response) {
+            console.log(await response.json());
+            // Here we tell FF that the save was successfull
+            // FF will add the changes to the ledger of previous successfull changes
+            // FF will also re-enable all elements
+            FF.saveSuccess();
+        })
+        .catch(function () {
+            // Here we tell FF to re-enable all elements
+            // FF will not add the changes to the ledger of previous changes
+            FF.saveFinally();
+        });
+}
+```
+
+Alternatively, if we wish to send changes as an object we can use something like superjson
+```js
+import superjson from 'superjson';
+
+function save(fragment: object) {
+
+    FF.saveStart(); 
+    
+    const response = fetch('/updateInfo', {
+        method: 'POST',
+        body: superjson.stringify(fragment),
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    });
+
+    response
+        .then(async function (response) {
+            console.log(await response.json());
+            FF.saveSuccess();
+        })
+        .catch(function () {
+            FF.saveFinally();
+        });
+}
+```
+
+
+
+### Cleaning up
+Before removing the form from the view you should also run some cleanup for the `FF` object.
+```JS
+FF.destroy();
+```
+This will remove event listeners as well as clear any timeouts and intervals that were created by FF.
+
+
+
+## Backend usage
+
+### Form submission w/ progressive enhancement or fetch (using FormData)
 ```js
 import { formToJSON } from 'fragment-forms';
 
@@ -276,9 +518,7 @@ async function POST(request){
 }
 ```
 
-### Form submission (from front end / JS enabled)
-In this example we are using superjson \
-Feel free to use any other applicable library 
+### Form submission w/ fetch (using superjson)
 ```js
 import superjson from 'superjson';
 
@@ -290,18 +530,26 @@ async function POST(request){
 }
 ```
 
-### Fragment  (from front end / JS enabled)
-In this example we are using superjson \
-Feel free to use any other applicable library 
+### Fragments w/ fetch (using FormData)
 ```js
-import superjson from 'superjson';
+import { formToJSON } from 'fragment-forms';
 
 async function POST(request){
-	const fragmentText = await request.text();
-	const fragment = superjson.parse(fragmentText);
-    //Validate fragment -> fragment ok -> update in db
+    const formData = await request.formData();
+    const fragment = formToJSON(formData);
+    //Validate fragment -> fragment ok -> update db
     //Error? -> return error to front end
 }
 ```
 
-## Front end usage
+### Fragments w/ fetch (using superjson)
+```js
+import superjson from 'superjson';
+
+async function POST(request){
+	const formText = await request.text();
+	const fragment = superjson.parse(formText);
+    //Validate fragment -> fragment ok -> update db
+    //Error? -> return error to front end
+}
+```

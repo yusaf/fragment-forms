@@ -109,20 +109,19 @@ export function setValues({ form, altNames, coerceTypes, data, path }: SetValue)
 	}
 }
 
-type Entry = [string, string];
 type ModifiedEntry = [string[], Primitive];
 type ModifiedEntries = ModifiedEntry[];
 
 export function toEntries(
 	element: FormData | HTMLFormElement | NodeListOf<Element> | null | undefined
-): Entry[] {
-	let entries: Entry[] = [];
+): ModifiedEntries {
+	let entries: [string, string][] = [];
 
 	if (element instanceof FormData) {
-		entries = [...element] as Entry[];
+		entries = [...element] as [string, string][];
 	} //
 	else if (element instanceof HTMLFormElement) {
-		entries = [...new FormData(element)] as Entry[];
+		entries = [...new FormData(element)] as [string, string][];
 		// elements = [
 		// 	...element.querySelectorAll(`
 		//         input[name]:not([name=""]):not(:disabled):not([type=checkbox]):not([type=radio]):not([type=submit]),
@@ -173,63 +172,10 @@ export function toEntries(
 			entries.push([name, element.value]);
 		}
 	}
-	return entries;
-}
 
-export function modifyEntries(entries: Entry[]): ModifiedEntries {
 	return entries.map(([name, value]) => entryToPathAndCoercedType(name, value));
 }
 
-export function modifiedEntriesToJSON(entries: ModifiedEntries): JSONData {
-	const data: any = {};
-
-	for (let i = 0, iLen = entries.length; i < iLen; i++) {
-		const [path, value] = entries[i];
-		let target = data;
-		for (let j = 0, jLen = path.length; j < jLen; j++) {
-			const isLast = j === jLen - 1;
-			const key = path[j];
-			const nextKey = path?.[j + 1];
-			let current = target?.[key];
-			if (isLast) {
-				if (key === '') {
-					target.push(value);
-				} else {
-					current = value;
-				}
-			} //
-			else if (current === undefined) {
-				if (!isNaN(nextKey as any as number)) {
-					current = [];
-				} else if (nextKey === '') {
-					current = [];
-				} else if (nextKey !== undefined) {
-					current = {};
-				}
-			}
-			if (key !== '') {
-				if (typeof target !== 'object') {
-					throw new Error(
-						`You are trying to set a property onto a primitive value at the path [${path.join(
-							', '
-						)}]`
-					);
-				}
-				target[key] = current;
-				target = target[key];
-			}
-		}
-	}
-	return data;
-}
-export function entriesToFormData(entries: Entry[]) {
-	const formData = new FormData();
-	for (let i = 0, iLen = entries.length; i < iLen; i++) {
-		const [name, value] = entries[i];
-		formData.append(name, value);
-	}
-	return formData;
-}
 const coercables = ['string', 'number', 'boolean', 'date', 'dateTime'] as const;
 type Coercable = (typeof coercables)[number];
 export function nameToPath(name: string): string[] {
