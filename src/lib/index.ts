@@ -1,3 +1,11 @@
+// CHANGES
+// queue event listeners until form added
+// allow triggers for fragmentOnInput
+// reset all except unsupported e.g. type="file"
+// add zod support
+// expect data back from server to have data, error and issues
+// expect data back from server not to have coerced types, may also be json
+// add marker to disabled elements and only re-enable elements that were previously enabled
 import type { JSONData, FormElement, FormElements, Primitive } from './utils.js';
 import {
 	toEntries,
@@ -11,12 +19,6 @@ import {
 	entriesToFormData
 } from './utils.js';
 import { extend, contains, debounce, alwaysSelectors } from './utils.js';
-
-import structuredClone from '@ungap/structured-clone';
-if (!('structuredClone' in globalThis)) {
-	//@ts-ignore
-	globalThis.structuredClone = structuredClone;
-}
 
 const FormDataSelector = `
 input[name]:not([name=""]):not(:disabled):not([type=checkbox]):not([type=radio]):not([type=submit]),
@@ -227,7 +229,6 @@ export function attributes(data: JSONData | null = null) {
 
 		if (attrName) {
 			attrs[attrName] = attrValue;
-		} else {
 		}
 		if (type === 'option') {
 			delete attrs['name'];
@@ -251,12 +252,18 @@ type FragmentFormOpts = {
 	autosaveTimeout: number;
 };
 
-type FragmentAutoSaveObj<T extends JSONData> = { data: DeepPartial<T>; formData: FormData };
+type FragmentAutoSaveObj<T extends JSONData> = {
+	data: DeepPartial<T>;
+	formData: FormData;
+	name: string;
+};
 
 type FragmentOnInputCallback<T extends JSONData> = (
 	data: FragmentAutoSaveObj<T>,
 	commit: () => void
 ) => void;
+
+type OnChangeCallback<T extends JSONData> = (data: DeepPartial<T>) => void;
 
 export class FragmentForm<T extends JSONData = {}> {
 	private form: HTMLFormElement;
@@ -268,6 +275,7 @@ export class FragmentForm<T extends JSONData = {}> {
 
 	private formDisabled: boolean = false;
 
+	private onChangeAlready: boolean = false;
 	private fragmentOnInputAlready: boolean = false;
 	private autoSaveCallbackAlready: boolean = false;
 	private autoSaveTimerAlready: boolean = false;
@@ -286,6 +294,8 @@ export class FragmentForm<T extends JSONData = {}> {
 
 	private saveStatusCallback?: (enabled: boolean) => void;
 
+	private onChangeCallback?: (data: DeepPartial<T>) => void;
+
 	constructor(form: HTMLFormElement | null, opts?: FragmentFormArgOpts) {
 		if (!(form instanceof HTMLFormElement)) {
 			throw new Error('form argument must be a HTML Form element');
@@ -293,7 +303,7 @@ export class FragmentForm<T extends JSONData = {}> {
 		this.form = form;
 
 		const formValues = formToJSON(this.form);
-		this.valuesSavedHistory = formValues;
+		this._valuesSavedHistory(formValues);
 
 		if (opts) {
 			this.opts = { ...this.opts, ...opts };
@@ -336,11 +346,18 @@ export class FragmentForm<T extends JSONData = {}> {
 		this.valuesToSave = {};
 		this.valuesToSaveFD = new FormData();
 	}
+	private _valuesSavedHistory(data: any) {
+		this.valuesSavedHistory = data;
+		if (this.onChangeCallback) {
+			this.onChangeCallback(data);
+		}
+		return this;
+	}
 
 	public clear() {
 		this._resetValuesToSave();
 		this._clearAutoSaveDebounce();
-		this.valuesSavedHistory = {};
+		this._valuesSavedHistory({});
 		this._setSaveStatus(false);
 		clearForm(this.form);
 		return this;
@@ -348,7 +365,7 @@ export class FragmentForm<T extends JSONData = {}> {
 
 	public fill(data: any, clear = true) {
 		this.clear();
-		this.valuesSavedHistory = data;
+		this._valuesSavedHistory(data);
 		fillForm(this.form, data);
 		return this;
 	}
@@ -384,7 +401,7 @@ export class FragmentForm<T extends JSONData = {}> {
 
 	public saveSuccess() {
 		const _this = this;
-		this.valuesSavedHistory = extend(this.valuesSavedHistory, this.valuesToSave);
+		this._valuesSavedHistory(extend(this.valuesSavedHistory, this.valuesToSave));
 		this._resetValuesToSave();
 		this.enableAll();
 		_this._setSaveStatus(false);
@@ -400,7 +417,7 @@ export class FragmentForm<T extends JSONData = {}> {
 
 	public submitSuccess() {
 		const _this = this;
-		this.valuesSavedHistory = formToJSON(this.form);
+		this._valuesSavedHistory(formToJSON(this.form));
 		this._resetValuesToSave();
 		this.enableAll();
 		_this._setSaveStatus(false);
@@ -454,7 +471,7 @@ export class FragmentForm<T extends JSONData = {}> {
 		this._setSaveStatus(true);
 	}
 
-	private _commitToSaveValues(values: any, formData: FormData) {
+	private _commitToSaveValues(values: any, formData: FormData, name: string) {
 		this.valuesToSave = extend(this.valuesToSave, values);
 		this.valuesToSaveFD = formData;
 		if (contains(this.valuesSavedHistory, this.valuesToSave)) {
@@ -464,7 +481,7 @@ export class FragmentForm<T extends JSONData = {}> {
 		} //
 		else if (this.autoSaveCallback) {
 			this._startAutosaveTimer();
-			this.autoSaveCallback({ data: this.valuesToSave, formData: this.valuesToSaveFD });
+			this.autoSaveCallback({ data: this.valuesToSave, formData: this.valuesToSaveFD, name });
 		} //
 		else {
 			this._setSaveStatus(true);
@@ -517,8 +534,8 @@ export class FragmentForm<T extends JSONData = {}> {
 			);
 			const formData = entriesToFormData(entries);
 			const data = modifiedEntriesToJSON(modifyEntries(entries)) as DeepPartial<T>;
-			callback({ data, formData }, function () {
-				_this._commitToSaveValues(data, formData);
+			callback({ data, formData, name }, function () {
+				_this._commitToSaveValues(data, formData, name);
 			});
 		};
 
@@ -527,6 +544,14 @@ export class FragmentForm<T extends JSONData = {}> {
 		this.addEventListener('input', onInput);
 		this.addEventListener('input', onInputDebounce);
 		this.addEventListener('focusout', _onInputDebounce);
+	}
+
+	public onChange(callback: OnChangeCallback<T>) {
+		if (this.onChangeAlready) {
+			throw new Error('.onChange() is not reusable and cannot be initialized more than once');
+		}
+		this.onChangeAlready = true;
+		this.onChangeCallback = callback;
 	}
 
 	public destroy() {

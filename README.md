@@ -260,9 +260,22 @@ The `POST` function is just for demonstrative purposes \
 Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
 
 ### Pre-filling attributes
-
 We first need to create an `attrs` function that will create the attributes for our fields.
+#### Empty form
+```js
+import { FragmentForm } from 'fragment-forms';
+const attrs = FragmentForm.attributes();
+```	
 
+#### Form with value population
+`FragmentForm.attributes` accepts 1 argument which can be `null` for an empty form, or an object of values. 
+```js
+import { FragmentForm } from 'fragment-forms';
+const data = await prefillDataFromDatabase();
+const attrs = FragmentForm.attributes(data);
+```	
+
+#### Using the attrs function
 `attrs` accepts 3 arguments `name`, `type` and `value/additional attrs`
 - `name` (required) - must be the name of the field using the naming conventions
 - `type` (required) - must be an input type e.g. `"checkbox"` or the elements `select`, `option` and `textarea`
@@ -271,20 +284,7 @@ We first need to create an `attrs` function that will create the attributes for 
   - The value sould also be the coerce type for that field e.g. an input with the name `"agree(boolean)"` the value should be set as `true`
   - Value can also be and object with key pair values representing attributes you wish to set to the element
 
-#### Empty form
-```js
-import { FragmentForm } from 'fragment-forms';
-const attrs = FragmentForm.attributes();
-```	
-
-#### Form with value population
-```js
-import { FragmentForm } from 'fragment-forms';
-const data = await prefillDataFromDatabase();
-const attrs = FragmentForm.attributes(data);
-```	
-
-#### Attrs usage ( svelte example )
+#### Attrs practical usage ( svelte example )
 ```svelte
 <form method="POST">
 	<input {...attrs('_$id', 'hidden')} /><br />
@@ -378,7 +378,10 @@ function submit() {
     
     const response = fetch('/saveInfo', {
         method: 'POST',
-        body: superjson.stringify( formToJSON(form) )
+        body: superjson.stringify( formToJSON(form) ),
+        headers: {
+            'Content-Type': 'application/json'
+        }
     });
 
     response
