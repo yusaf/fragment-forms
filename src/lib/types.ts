@@ -70,11 +70,12 @@ export type AddEventListenerArgs = Parameters<HTMLFormElement['addEventListener'
 export type CEDT<ZSchema extends AllowedZSchema> = {
 	submitData: z.infer<ZSchema>;
 	submitFormData: FormData;
-	saveData: z.infer<ZSchema>;
+	saveData: DeepPartial<z.infer<ZSchema>>;
 	issues: FormattedIssues<ZSchema>['issues'];
 	noPathIssues: FormattedIssues<ZSchema>['noPathIssues'];
 	canSave: boolean;
 	autoSaveTimeLeft: number;
+	values: DeepPartial<z.infer<ZSchema>>;
 	savedData: z.infer<ZSchema>;
 };
 

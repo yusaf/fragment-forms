@@ -60,6 +60,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _noPathIssues: string[] = [];
 	private _issues: any = {};
 
+	private _values: any = {};
 	private _valuesToSave: any = {};
 	private _valuesSavedHistory: any = {};
 
@@ -132,7 +133,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	public listen(name: 'submitData', callback: CEDTCB<ZSchema>['submitData']): this;
 	public listen(name: 'submitFormData', callback: CEDTCB<ZSchema>['submitFormData']): this;
-	public listen(name: 'saveData', callback: CEDTCB<ZSchema>['submitData']): this;
+	public listen(name: 'saveData', callback: CEDTCB<ZSchema>['saveData']): this;
 	public listen(name: 'issues', callback: CEDTCB<ZSchema>['issues']): this;
 	public listen(name: 'noPathIssues', callback: CEDTCB<ZSchema>['noPathIssues']): this;
 	public listen(name: 'canSave', callback: CEDTCB<ZSchema>['canSave']): this;
