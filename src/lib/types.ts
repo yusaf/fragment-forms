@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-type DeepPartial<T> = T extends Date
+export type DeepPartial<T> = T extends Date
 	? T
 	: T extends object
 	? {
@@ -61,20 +61,26 @@ export type FragmentFormsOpts = {
 	saveSchema: AllowedZSchema;
 	debounce: number;
 	autoSaveTimeout: number;
-	save: boolean | 'submit';
+	save: boolean;
 };
 
 export type AddEventListenerArgs = Parameters<HTMLFormElement['addEventListener']>;
 
 //CustomEventDetailTypes
 export type CEDT<ZSchema extends AllowedZSchema> = {
-	save: boolean;
 	submitData: z.infer<ZSchema>;
 	submitFormData: FormData;
 	saveData: z.infer<ZSchema>;
 	saveFormData: FormData;
 	issues: FormattedIssues<ZSchema>['issues'];
 	noPathIssues: FormattedIssues<ZSchema>['noPathIssues'];
+	canSave: boolean;
+	autoSaveTimeLeft: number;
+	savedData: z.infer<ZSchema>;
+};
+
+export type CEDTCB<ZSchema extends AllowedZSchema> = {
+	[key in keyof CEDT<ZSchema>]: (detail: CEDT<ZSchema>[key]) => void;
 };
 
 type KeyValueObject = { [key: string]: any };

@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import type {
 	Primitive,
-	FormElement,
 	FormElements,
 	FormattedIssues,
-	AllowedZSchema
+	AllowedZSchema,
+	FormDataStructure
 } from './types.js';
 
 type SetValue = {
 	form: HTMLFormElement;
-	data: JSONDataInner;
+	data: FormDataStructure;
 	path: string[];
 	altNames: Record<string, Primitive>;
 	coerceTypes: Record<string, Coercable>;
@@ -171,7 +171,7 @@ export function modifyEntries(entries: Entry[]): ModifiedEntries {
 	return entries.map(([name, value]) => entryToPathAndCoercedType(name, value));
 }
 
-export function modifiedEntriesToJSON(entries: ModifiedEntries): JSONData {
+export function modifiedEntriesToJSON(entries: ModifiedEntries): FormDataStructure {
 	const data: any = {};
 
 	for (let i = 0, iLen = entries.length; i < iLen; i++) {
@@ -522,44 +522,6 @@ export function formatIssues<ZSchema extends AllowedZSchema>(
 		noPathIssues
 	};
 }
-// export function formatIssues<ZSchema extends AllowedZSchema>(
-// 	issues: any
-// ): FormattedIssues<ZSchema> {
-// 	const done: any = {};
-// 	const formattedIssues: any = {};
-// 	const noPathIssues: string[] = [];
-// 	for (let i = 0, iLen = issues.length; i < iLen; i++) {
-// 		const issue = issues[i] as z.ZodIssue & { type?: string; expected?: string };
-// 		const path = issue?.path;
-// 		if (!path.length) {
-// 			noPathIssues.push(issue.message);
-// 			continue;
-// 		}
-// 		const key = path.join('-');
-// 		if (done.hasOwnProperty(key)) {
-// 			continue;
-// 		}
-// 		done[key] = true;
-// 		let target: any = formattedIssues;
-// 		for (let j = 0, jLen = path.length; j < jLen; j++) {
-// 			const last = j === jLen - 1;
-// 			let currentTarget = target?.[path[j]] || {};
-// 			if (last) {
-// 				if (issue?.type === 'array' || issue?.expected === 'array' || !isNaN(path[j] as number)) {
-// 					currentTarget._error = issue.message;
-// 				} else {
-// 					currentTarget = issue.message;
-// 				}
-// 			}
-// 			target[path[j]] = currentTarget;
-// 			target = currentTarget;
-// 		}
-// 	}
-// 	return {
-// 		issues: formattedIssues,
-// 		noPathIssues
-// 	};
-// }
 
 export function getSchemaObject<Schema extends z.ZodTypeAny>(schema: Schema): z.AnyZodObject {
 	let schemaObject = schema;
@@ -578,4 +540,243 @@ export function getSchemaObject<Schema extends z.ZodTypeAny>(schema: Schema): z.
 		}
 	}
 	return schemaObject as unknown as z.AnyZodObject;
+}
+
+export function containsErrors(object: any) {
+	for (let key in object) {
+		const item = object[key];
+		if (!item) {
+			delete object[key];
+			continue;
+		}
+		if (typeof item === 'string' && item.length) {
+			return true;
+		}
+		if (typeof item === 'object' && Object.keys(item).length) {
+			if (containsErrors(item)) {
+				return true;
+			}
+			delete object[key];
+		}
+	}
+	return false;
+}
+
+const FormDataSelector = `
+input[name]:not([name=""]):not(:disabled):not([type=checkbox]):not([type=radio]):not([type=submit]),
+input[name]:not([name=""])[type=checkbox]:not(:disabled):checked,
+input[name]:not([name=""])[type=radio]:not(:disabled):checked,
+select[name]:not([name=""]):not(:disabled):has(:checked:not(:disabled)) option,
+textarea[name]:not([name=""]):not(:disabled)
+`;
+
+export function clearForm(
+	form: HTMLFormElement | null | undefined,
+	everything: boolean | string = false
+) {
+	if (!form) {
+		return;
+	}
+	const elements = form.querySelectorAll(
+		typeof everything === 'string'
+			? everything
+			: everything
+			? `input:not([type="submit"]), select option, textarea`
+			: FormDataSelector
+	) as any as FormElements;
+
+	for (let i = 0, iLen = elements.length; i < iLen; i++) {
+		const element = elements[i];
+		const nodeName = element.nodeName.toLowerCase();
+		const type = nodeName === 'input' ? element?.type || 'text' : nodeName;
+		if (type === 'radio') {
+			(element as HTMLInputElement).checked = false;
+		} else if (type === 'checkbox') {
+			(element as HTMLInputElement).checked = false;
+		} else if (nodeName === 'option') {
+			(element as any as HTMLOptionElement).selected = false;
+		} else if (nodeName === 'input' || nodeName === 'textarea') {
+			element.value = '';
+		}
+	}
+}
+
+export function fillForm(form: HTMLFormElement | null | undefined, data: FormDataStructure) {
+	if (!form) {
+		return;
+	}
+	const elements = form?.querySelectorAll(
+		'input[name]:not([name=""]), select[name]:not([name=""]), textarea[name]:not([name=""])'
+	) as any as FormElements;
+
+	const [altNames, coerceTypes] = getAltNamesAndTypes(elements);
+
+	setValues({
+		form,
+		altNames,
+		coerceTypes,
+		data,
+		path: []
+	});
+}
+
+export function formToJSON<T extends FormDataStructure>(
+	element: FormData | NodeListOf<Element> | HTMLFormElement | null | undefined
+): T {
+	if (!element) {
+		throw new Error(
+			'The toJSON argument must be either be FormData, a  HTML form element, or a list of input, select or textarea elements.'
+		);
+		4;
+	}
+
+	const entries = toEntries(element);
+	const data = modifiedEntriesToJSON(modifyEntries(entries));
+	return data as T;
+}
+
+const inputTypes = [
+	'checkbox',
+	'color',
+	'date',
+	'datetime-local',
+	'email',
+	'hidden',
+	'month',
+	'number',
+	'password',
+	'radio',
+	'range',
+	'search',
+	'tel',
+	'text',
+	'time',
+	'url',
+	'week'
+] as const;
+const nodeNames = ['select', 'option', 'textarea'] as const;
+
+type types = (typeof nodeNames)[number] | (typeof inputTypes)[number];
+
+export function attributes(data: FormDataStructure | null = null) {
+	const valueTracker: any = {};
+	const arraysCache: any = {};
+	return function (
+		name: string,
+		type: types,
+		additional: Primitive | Record<string, Primitive> = {}
+	) {
+		let attrs: any = {
+			name
+		};
+
+		if (type === 'select') {
+			if (name.endsWith('[]')) {
+				attrs.multiple = true;
+			}
+			return attrs;
+		}
+
+		let [altName, coerceFrom] = sliceCoerceTypeFromName(name);
+
+		let defaultValue: any;
+		if (typeof additional !== 'object' || additional instanceof Date) {
+			defaultValue = coerceTypeValue(additional, coerceFrom);
+			attrs.value = defaultValue;
+		} else {
+			attrs = { ...attrs, ...additional };
+			if (additional.hasOwnProperty('value')) {
+				defaultValue = coerceTypeValue(additional.value, coerceFrom);
+				attrs.value = defaultValue;
+			}
+		}
+
+		let nodeName: string;
+		if (inputTypes.includes(type as any)) {
+			nodeName = 'input';
+			attrs.type = type;
+		} else {
+			nodeName = type;
+		}
+
+		const path = nameToPath(altName);
+
+		let attrName = '';
+		let attrValue: string | boolean = '';
+		let target: any = data || {};
+		for (let i = 0, iLen = path.length; i < iLen; i++) {
+			const isLast = i === iLen - 1;
+			const key = path[i];
+			const nextKey = path?.[i + 1];
+			const hasCurrent = target?.hasOwnProperty(key);
+			let current = target?.[key];
+
+			if (nextKey === '') {
+				if (!hasCurrent) {
+					break;
+				}
+				if (!arraysCache.hasOwnProperty(name)) {
+					arraysCache[name] = current.map((item: any) => coerceTypeValue(item, coerceFrom));
+				}
+				const values = arraysCache[name];
+				const has = values.includes(defaultValue);
+				if (type === 'checkbox') {
+					attrName = 'checked';
+					attrValue = has;
+				} else if (type === 'option') {
+					attrName = 'selected';
+					attrValue = has;
+				} else if (nodeName === 'input') {
+					if (!valueTracker.hasOwnProperty(name)) {
+						valueTracker[name] = 0;
+					}
+					attrName = 'value';
+					attrValue = values?.[valueTracker[name]++];
+				}
+				break;
+			} //
+			else if (isLast) {
+				if (!hasCurrent) {
+					break;
+				}
+				const value = coerceTypeValue(current, coerceFrom);
+				if (type === 'radio') {
+					attrName = 'checked';
+					attrValue = value === defaultValue;
+				} else if (type === 'checkbox') {
+					attrName = 'checked';
+					attrValue = value === defaultValue;
+				} else if (type === 'option') {
+					attrName = 'selected';
+					attrValue = value === defaultValue;
+				} else {
+					attrName = 'value';
+					attrValue = value;
+				}
+
+				break;
+			} //
+			else if (current === undefined) {
+				if (!isNaN(nextKey as any as number)) {
+					current = [];
+				} else if (nextKey === '') {
+					current = [];
+				} else if (nextKey !== undefined) {
+					current = {};
+				}
+			}
+			if (data) {
+				target[key] = current;
+				target = target[key];
+			}
+		}
+
+		if (attrName) {
+			attrs[attrName] = attrValue;
+		}
+		if (type === 'option') {
+			delete attrs['name'];
+		}
+		return attrs;
+	};
 }

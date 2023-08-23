@@ -4,7 +4,9 @@
 	import schema from './schema';
 
 	const test = new FragmentForms({
-		schema
+		schema,
+		save: true,
+		autoSaveTimeout: 5000
 	});
 
 	test.addEventListener('submit', () => console.clear());
@@ -20,8 +22,25 @@
 	test.listen('submitData', function (data) {
 		console.log('e:submitData', data);
 	});
+
 	test.listen('submitFormData', function (formData) {
 		console.log('e:submitFormData', [...formData]);
+	});
+
+	test.listen('saveData', function (data) {
+		console.log('e:saveData', data);
+	});
+
+	test.listen('saveFormData', function (formData) {
+		console.log('e:saveFormData', [...formData]);
+	});
+
+	test.listen('canSave', function (canSave) {
+		console.log('e:canSave', canSave);
+	});
+
+	test.listen('autoSaveTimeLeft', function (timeLeft) {
+		console.log('e:autoSaveTimeLeft', timeLeft);
 	});
 
 	onMount(function () {
@@ -34,8 +53,6 @@
 <form method="POST">
 	First name:<input type="text" name="name.first" /><br />
 	Last name:<input type="text" name="name.last" /><br />
-	test:<input type="text" name="test[]" /><br />
-	test:<input type="text" name="test[](number)" /><br />
 
 	Child 1<br />
 	Name:<input type="text" name="children[0].name" /><br />

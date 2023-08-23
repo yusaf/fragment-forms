@@ -1,10 +1,12 @@
 import type {
 	FormElement,
+	FormElements,
 	AllowedZSchema,
 	FragmentFormsConstructorOpts,
 	FragmentFormsOpts,
 	AddEventListenerArgs,
 	CEDT,
+	CEDTCB,
 	FormattedIssues
 } from './types.js';
 import { formDataStructure } from './types.js';
@@ -17,19 +19,31 @@ import {
 	modifyEntries,
 	modifiedEntriesToJSON,
 	formatIssues,
-	getSchemaObject
+	getSchemaObject,
+	nameToPath,
+	sliceCoerceTypeFromName,
+	containsErrors,
+	extend,
+	contains,
+	clearForm,
+	fillForm,
+	formToJSON,
+	attributes
 } from './utils.js';
+import type { ZodIssue } from 'zod';
 
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
 class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _opts: FragmentFormsOpts = {
 		schema: formDataStructure,
-		saveSchema: formDataStructure,
+		saveSchema: null as any,
 		debounce: 500,
 		autoSaveTimeout: 0,
 		save: false
 	};
+
+	private _formDisabled: boolean = false;
 
 	private _onInputTimeout: any = noop;
 
@@ -40,9 +54,17 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _customEventListeners: Record<string, CallableFunction[]> = {};
 
 	private _autoSaveTimerStartNumber: number = 0;
+	private _autoSaveTimerCurrentNumber: number = 0;
+	private _autoSaveNumberTimer: any = 0;
 
 	private _noPathIssues: string[] = [];
 	private _issues: any = {};
+
+	private _valuesToSaveFD: FormData = new FormData();
+	private _valuesToSave: any = {};
+	private _valuesSavedHistory: any = {};
+
+	private _clearAutoSaveDebounce: () => void = () => {};
 
 	constructor(opts?: FragmentFormsConstructorOpts<ZSchema>) {
 		this._opts = { ...this._opts, ...opts };
@@ -56,8 +78,16 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			this._autoSaveTimerStartNumber = Math.floor(this._opts.autoSaveTimeout / 1000);
 		}
 		if (this._opts.save) {
-			this._opts.saveSchema = getSchemaObject(this._opts.saveSchema);
-			this._onInput();
+			if (this._opts.saveSchema === null) {
+				const saveSchema = getSchemaObject(this._opts.schema);
+				if (typeof saveSchema.deepPartial === 'function') {
+					this._opts.saveSchema = saveSchema.deepPartial();
+				} else {
+					this._opts.saveSchema = saveSchema;
+				}
+			} else {
+				this._opts.saveSchema = formDataStructure;
+			}
 		}
 		return this;
 	}
@@ -100,22 +130,15 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
-	public listen(name: 'save', callback: (detail: CEDT<ZSchema>['save']) => void): this;
-	public listen(name: 'submitData', callback: (detail: CEDT<ZSchema>['submitData']) => void): this;
-	public listen(
-		name: 'submitFormData',
-		callback: (detail: CEDT<ZSchema>['submitFormData']) => void
-	): this;
-	public listen(name: 'saveData', callback: (detail: CEDT<ZSchema>['submitData']) => void): this;
-	public listen(
-		name: 'saveFormData',
-		callback: (detail: CEDT<ZSchema>['submitFormData']) => void
-	): this;
-	public listen(name: 'issues', callback: (detail: CEDT<ZSchema>['issues']) => void): this;
-	public listen(
-		name: 'noPathIssues',
-		callback: (detail: CEDT<ZSchema>['noPathIssues']) => void
-	): this;
+	public listen(name: 'submitData', callback: CEDTCB<ZSchema>['submitData']): this;
+	public listen(name: 'submitFormData', callback: CEDTCB<ZSchema>['submitFormData']): this;
+	public listen(name: 'saveData', callback: CEDTCB<ZSchema>['submitData']): this;
+	public listen(name: 'saveFormData', callback: CEDTCB<ZSchema>['submitFormData']): this;
+	public listen(name: 'issues', callback: CEDTCB<ZSchema>['issues']): this;
+	public listen(name: 'noPathIssues', callback: CEDTCB<ZSchema>['noPathIssues']): this;
+	public listen(name: 'canSave', callback: CEDTCB<ZSchema>['canSave']): this;
+	public listen(name: 'autoSaveTimeLeft', callback: CEDTCB<ZSchema>['autoSaveTimeLeft']): this;
+	public listen(name: 'savedData', callback: CEDTCB<ZSchema>['savedData']): this;
 	public listen(name: string, callback: (detail: any) => void): this {
 		if (!isBrowser) {
 			return this;
@@ -132,6 +155,8 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		if (!isBrowser) {
 			return this;
 		}
+		this._cancelAutoSaveTimer();
+		this._clearAutoSaveDebounce();
 		this._onInputTimeout();
 		if (this._form) {
 			for (let i = 0, iLen = this._addedEventListeners.length; i < iLen; i++) {
@@ -144,13 +169,15 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
-	private _dispatch(name: 'save', detail: CEDT<ZSchema>['save']): this;
 	private _dispatch(name: 'submitData', detail: CEDT<ZSchema>['submitData']): this;
 	private _dispatch(name: 'submitFormData', detail: CEDT<ZSchema>['submitFormData']): this;
 	private _dispatch(name: 'saveData', detail: CEDT<ZSchema>['saveData']): this;
 	private _dispatch(name: 'saveFormData', detail: CEDT<ZSchema>['saveFormData']): this;
 	private _dispatch(name: 'issues', detail: CEDT<ZSchema>['issues']): this;
 	private _dispatch(name: 'noPathIssues', detail: CEDT<ZSchema>['noPathIssues']): this;
+	private _dispatch(name: 'canSave', detail: CEDT<ZSchema>['canSave']): this;
+	private _dispatch(name: 'autoSaveTimeLeft', detail: CEDT<ZSchema>['autoSaveTimeLeft']): this;
+	private _dispatch(name: 'savedData', detail: CEDT<ZSchema>['savedData']): this;
 	private _dispatch(name: string, detail: any): this {
 		if (this._customEventListeners.hasOwnProperty(name)) {
 			const listeners = this._customEventListeners[name];
@@ -164,7 +191,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _setIssues({ issues, noPathIssues }: FormattedIssues<ZSchema>) {
 		this._issues = issues;
 		this._noPathIssues = noPathIssues;
-		if (Object.keys(issues).length) {
+		if (containsErrors(issues)) {
 			this._dispatch('issues', issues);
 		}
 		if (noPathIssues.length) {
@@ -175,6 +202,9 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	private _onSubmit() {
 		if (!this._form) {
+			return;
+		}
+		if (this._formDisabled) {
 			return;
 		}
 		const _this = this;
@@ -198,10 +228,18 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		let lastInput: EventTarget | null = null;
 
 		const onInput = function (e: InputEvent) {
+			if (_this._formDisabled) {
+				return;
+			}
+			_this._setSaveStatus(false);
+			_this._cancelAutoSaveTimer();
 			lastInput = e.target;
 		};
 
 		const onInputDebounce = function (e: InputEvent) {
+			if (_this._formDisabled) {
+				return;
+			}
 			const input = e.target as FormElement;
 			const name = input?.name;
 			if (!name) {
@@ -222,6 +260,53 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				)
 			);
 			const data = modifiedEntriesToJSON(modifyEntries(entries));
+			const currentIssues = _this._issues;
+			const zodIssues = _this._opts.saveSchema.safeParse(data);
+			const path = nameToPath(sliceCoerceTypeFromName(name)[0]);
+			if ('error' in zodIssues) {
+				const issue = zodIssues.error.issues[0] as ZodIssue & { type?: string; expected?: string };
+				let target: any = currentIssues;
+				for (let i = 0, iLen = path.length; i < iLen; i++) {
+					let _break = false;
+					const last = i === iLen - 1;
+					const secondToLast = i === iLen - 2;
+					let currentTarget = target?.[path[i]] || {};
+					if (secondToLast && path[i + 1] === '') {
+						currentTarget._error = issue.message;
+						_break = true;
+						// need to break later as we need to update reference
+					} else if (last) {
+						if (issue?.type === 'array' || issue?.expected === 'array') {
+							currentTarget._error = issue.message;
+						} else {
+							currentTarget = issue.message;
+						}
+					}
+					target[path[i]] = currentTarget;
+					target = currentTarget;
+					if (_break) {
+						break;
+					}
+				}
+			} else {
+				let target: any = currentIssues;
+				for (let i = 0, iLen = path.length; i < iLen; i++) {
+					const last = i === iLen - 1;
+					const secondToLast = i === iLen - 2;
+					if (secondToLast && path[i + 1] === '') {
+						delete target?.[path[i]];
+						break;
+					} else if (last) {
+						delete target?.[path[i]];
+						break;
+					} //
+					target = target?.[path[i]];
+				}
+			}
+			_this._setIssues({ issues: currentIssues, noPathIssues: [] });
+			if (!('error' in zodIssues)) {
+				_this._commitToSaveValues(data, entriesToFormData(entries));
+			}
 		};
 
 		const [onInputDebounced, clearDebounce] = debounce(onInputDebounce, this._opts.debounce);
@@ -231,6 +316,167 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		this.addEventListener('input', onInput as any);
 		this.addEventListener('focusout', onInputDebounce as any);
 		this.addEventListener('input', onInputDebounced as any);
+		if (this._opts.autoSaveTimeout) {
+			const [autoSaveDebounce, _clearAutoSaveDebounce] = debounce(function () {
+				_this._dispatch('saveData', _this._valuesToSave);
+				_this._dispatch('saveFormData', _this._valuesToSaveFD);
+			}, this._opts.autoSaveTimeout);
+			this._clearAutoSaveDebounce = _clearAutoSaveDebounce;
+			this.addEventListener('input', autoSaveDebounce);
+		}
+	}
+
+	private _commitToSaveValues(data: any, formData: FormData) {
+		this._valuesToSave = extend(this._valuesToSave, data);
+		this._valuesToSaveFD = formData;
+		if (contains(this._valuesSavedHistory, this._valuesToSave)) {
+			this._resetValuesToSave();
+			this._setSaveStatus(false);
+			this._clearAutoSaveDebounce();
+		} //
+		else if (this._opts.autoSaveTimeout) {
+			this._startAutosaveTimer();
+		} //
+		else {
+			this._setSaveStatus(true);
+		}
+	}
+
+	private _resetValuesToSave() {
+		this._valuesToSave = {};
+		this._valuesToSaveFD = new FormData();
+		return this;
+	}
+	private _setSaveStatus(canSave: boolean) {
+		this._dispatch('canSave', canSave);
+		return this;
+	}
+
+	private _startAutosaveTimer() {
+		const _this = this;
+
+		this._setSaveStatus(true);
+
+		this._autoSaveTimerCurrentNumber = this._autoSaveTimerStartNumber;
+
+		this._dispatch('autoSaveTimeLeft', this._autoSaveTimerCurrentNumber--);
+
+		this._autoSaveNumberTimer = setInterval(function () {
+			_this._dispatch('autoSaveTimeLeft', _this._autoSaveTimerCurrentNumber--);
+			if (_this._autoSaveTimerCurrentNumber === -1) {
+				_this._cancelAutoSaveTimer();
+			}
+		}, 1000);
+	}
+	private _cancelAutoSaveTimer() {
+		clearInterval(this._autoSaveNumberTimer);
+		return this;
+	}
+
+	public static attributes = attributes;
+
+	private _disable(disable: boolean) {
+		if (!this._form) {
+			return;
+		}
+		const inputs = this._form.querySelectorAll(
+			'input, textarea, select, button'
+		) as any as FormElements;
+		for (let i = 0, iLen = inputs.length; i < iLen; i++) {
+			const input = inputs[i];
+			if (disable) {
+				if (input.disabled) {
+					input.dataset.FFAlreadyDisabled = 'true';
+				}
+			} else if (input.dataset.FFAlreadyDisabled) {
+				delete input.dataset.FFAlreadyDisabled;
+				continue;
+			}
+			input.disabled = disable;
+		}
+		return this;
+	}
+
+	public disableAll() {
+		this._formDisabled = true;
+		return this._disable(true);
+	}
+	public enableAll() {
+		this._formDisabled = false;
+		return this._disable(false);
+	}
+
+	private _setValuesSavedHistory(data: any) {
+		this._valuesSavedHistory = data;
+		this._dispatch('savedData', this._valuesSavedHistory);
+		return this;
+	}
+
+	public clear() {
+		this._resetValuesToSave();
+		this._clearAutoSaveDebounce();
+		this._setValuesSavedHistory({});
+		this._setSaveStatus(false);
+		clearForm(this._form);
+		return this;
+	}
+
+	public fill(data: any, clear = true) {
+		this.clear();
+		this._setValuesSavedHistory(data);
+		fillForm(this._form, data);
+		return this;
+	}
+
+	public cancelSave() {
+		this._setSaveStatus(false);
+		this._clearAutoSaveDebounce();
+		return this;
+	}
+
+	public saveStart() {
+		this.disableAll();
+		this.cancelSave();
+		return this;
+	}
+
+	public saveSuccess() {
+		const _this = this;
+		this._setValuesSavedHistory(extend(this._valuesSavedHistory, this._valuesToSave));
+		this._resetValuesToSave();
+		this.enableAll();
+		_this._setSaveStatus(false);
+		return this;
+	}
+
+	public saveFinally() {
+		this.enableAll();
+		return this;
+	}
+
+	public submitStart = this.saveStart;
+
+	public submitSuccess() {
+		const _this = this;
+		this._setValuesSavedHistory(formToJSON(this._form));
+		this._resetValuesToSave();
+		this.enableAll();
+		_this._setSaveStatus(false);
+		return this;
+	}
+
+	public submitFinally = this.saveFinally;
+
+	public manualSave() {
+		if (this._formDisabled) {
+			return;
+		}
+		if (!Object.keys(this._valuesToSave).length) {
+			return;
+		}
+		this._dispatch('saveData', this._valuesToSave);
+		this._dispatch('saveFormData', this._valuesToSaveFD);
+		return this;
 	}
 }
 
