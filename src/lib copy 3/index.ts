@@ -1,11 +1,12 @@
+import type { ZodIssue } from 'zod';
+
 import type {
 	FormElement,
 	AllowedZSchema,
 	FragmentFormsConstructorOpts,
 	FragmentFormsOpts,
 	AddEventListenerArgs,
-	CEDT,
-	FormattedIssues
+	CEDT
 } from './types.js';
 import { formDataStructure } from './types.js';
 
@@ -15,17 +16,15 @@ import {
 	toEntries,
 	entriesToFormData,
 	modifyEntries,
-	modifiedEntriesToJSON,
-	formatIssues,
-	getSchemaObject
+	modifiedEntriesToJSON
 } from './utils.js';
+import schema from '../routes/tests/01/schema.js';
 
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
 class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _opts: FragmentFormsOpts = {
 		schema: formDataStructure,
-		saveSchema: formDataStructure,
 		debounce: 500,
 		autoSaveTimeout: 0,
 		save: false
@@ -41,8 +40,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	private _autoSaveTimerStartNumber: number = 0;
 
-	private _noPathIssues: string[] = [];
-	private _issues: any = {};
+	private _issues = [];
 
 	constructor(opts?: FragmentFormsConstructorOpts<ZSchema>) {
 		this._opts = { ...this._opts, ...opts };
@@ -54,10 +52,6 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				);
 			}
 			this._autoSaveTimerStartNumber = Math.floor(this._opts.autoSaveTimeout / 1000);
-		}
-		if (this._opts.save) {
-			this._opts.saveSchema = getSchemaObject(this._opts.saveSchema);
-			this._onInput();
 		}
 		return this;
 	}
@@ -73,16 +67,16 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		if (!isBrowser) {
 			return this;
 		}
+		this._onSubmit();
+		if (this._opts.save) {
+			this._onInput();
+		}
 		if (this._waitingEventListeners) {
 			for (let i = 0, iLen = this._waitingEventListeners.length; i < iLen; i++) {
 				this.addEventListener(...(this._waitingEventListeners[i] as AddEventListenerArgs));
 				this._addedEventListeners.push(this._waitingEventListeners[i] as AddEventListenerArgs);
 				this._waitingEventListeners[i] = null;
 			}
-		}
-		this._onSubmit();
-		if (this._opts.save) {
-			this._onInput();
 		}
 		return this;
 	}
@@ -101,21 +95,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	}
 
 	public listen(name: 'save', callback: (detail: CEDT<ZSchema>['save']) => void): this;
-	public listen(name: 'submitData', callback: (detail: CEDT<ZSchema>['submitData']) => void): this;
-	public listen(
-		name: 'submitFormData',
-		callback: (detail: CEDT<ZSchema>['submitFormData']) => void
-	): this;
-	public listen(name: 'saveData', callback: (detail: CEDT<ZSchema>['submitData']) => void): this;
-	public listen(
-		name: 'saveFormData',
-		callback: (detail: CEDT<ZSchema>['submitFormData']) => void
-	): this;
-	public listen(name: 'issues', callback: (detail: CEDT<ZSchema>['issues']) => void): this;
-	public listen(
-		name: 'noPathIssues',
-		callback: (detail: CEDT<ZSchema>['noPathIssues']) => void
-	): this;
+	public listen(name: 'fragment', callback: (detail: CEDT<ZSchema>['fragment']) => void): this;
 	public listen(name: string, callback: (detail: any) => void): this {
 		if (!isBrowser) {
 			return this;
@@ -145,30 +125,13 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	}
 
 	private _dispatch(name: 'save', detail: CEDT<ZSchema>['save']): this;
-	private _dispatch(name: 'submitData', detail: CEDT<ZSchema>['submitData']): this;
-	private _dispatch(name: 'submitFormData', detail: CEDT<ZSchema>['submitFormData']): this;
-	private _dispatch(name: 'saveData', detail: CEDT<ZSchema>['saveData']): this;
-	private _dispatch(name: 'saveFormData', detail: CEDT<ZSchema>['saveFormData']): this;
-	private _dispatch(name: 'issues', detail: CEDT<ZSchema>['issues']): this;
-	private _dispatch(name: 'noPathIssues', detail: CEDT<ZSchema>['noPathIssues']): this;
+	private _dispatch(name: 'fragment', detail: CEDT<ZSchema>['fragment']): this;
 	private _dispatch(name: string, detail: any): this {
 		if (this._customEventListeners.hasOwnProperty(name)) {
 			const listeners = this._customEventListeners[name];
 			for (let i = 0, iLen = listeners.length; i < iLen; i++) {
 				listeners[i](detail);
 			}
-		}
-		return this;
-	}
-
-	private _setIssues({ issues, noPathIssues }: FormattedIssues<ZSchema>) {
-		this._issues = issues;
-		this._noPathIssues = noPathIssues;
-		if (Object.keys(issues).length) {
-			this._dispatch('issues', issues);
-		}
-		if (noPathIssues.length) {
-			this._dispatch('noPathIssues', noPathIssues);
 		}
 		return this;
 	}
@@ -183,12 +146,11 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			const formData = new FormData(_this._form as HTMLFormElement);
 			const entries = toEntries(formData);
 			const data = modifiedEntriesToJSON(modifyEntries(entries));
-			const zodIssues = _this._opts.schema.safeParse(data);
+			console.log(data);
+			const zodIssues = schema.safeParse(data);
 			if (zodIssues && 'error' in zodIssues) {
-				_this._setIssues(formatIssues(zodIssues.error.issues));
-			} else {
-				_this._dispatch('submitData', data);
-				_this._dispatch('submitFormData', entriesToFormData(entries));
+				console.log(formatIssues(zodIssues.error.issues));
+				return;
 			}
 		});
 	}
@@ -235,5 +197,39 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 }
 
 export { FragmentForms };
+
+function formatIssues(issues: any) {
+	const done: any = {};
+	const formattedIssues = {};
+	const noPathIssues: string[] = [];
+	for (let i = 0, iLen = issues.length; i < iLen; i++) {
+		const issue = issues[i] as ZodIssue & { type?: string; expected?: string };
+		const path = issue?.path;
+		if (!path.length) {
+			noPathIssues.push(issue.message);
+			continue;
+		}
+		const key = path.join('-');
+		if (done.hasOwnProperty(key)) {
+			continue;
+		}
+		done[key] = true;
+		let target: any = formattedIssues;
+		for (let j = 0, jLen = path.length; j < jLen; j++) {
+			const last = j === jLen - 1;
+			let currentTarget = target?.[path[j]] || {};
+			if (last) {
+				if (issue?.type === 'array' || issue?.expected === 'array' || !isNaN(path[j] as number)) {
+					currentTarget._error = issue.message;
+				} else {
+					currentTarget = issue.message;
+				}
+			}
+			target[path[j]] = currentTarget;
+			target = currentTarget;
+		}
+	}
+	return [formattedIssues, noPathIssues];
+}
 
 function noop() {}

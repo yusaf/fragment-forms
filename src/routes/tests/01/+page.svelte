@@ -1,93 +1,52 @@
 <script lang="ts">
-	import { formToJSON, fillForm, clearForm, attributes as attr } from 'fragment-forms';
+	import { FragmentForms } from 'fragment-forms';
 	import { onMount } from 'svelte';
-	export let form;
+	import schema from './schema';
 
-	if (form) {
-		console.log('FORM', form);
-	}
-
-	const attributes = attr({
-		id: '',
-		user: {
-			name: {
-				first: 'Yusaf',
-				second: 'Khaliq'
-			},
-			sex: 'male',
-			dob: new Date('1990-01-01T00:00:00.000Z'),
-			interests: ['politics', 'finance'],
-			contact: ['email'],
-			consent: false
-		}
+	const test = new FragmentForms({
+		schema
 	});
 
-	console.log(attributes('user.interests[]', 'checkbox'));
+	test.addEventListener('submit', () => console.clear());
 
-	console.log(form);
+	test.listen('issues', function (issues) {
+		console.log('e:issues', issues);
+	});
 
-	let formEl: HTMLFormElement;
+	test.listen('noPathIssues', function (issues) {
+		console.log('e:noPathIssues', issues);
+	});
+
+	test.listen('submitData', function (data) {
+		console.log('e:submitData', data);
+	});
+	test.listen('submitFormData', function (formData) {
+		console.log('e:submitFormData', [...formData]);
+	});
+
 	onMount(function () {
-		formEl = document.querySelector('form') as HTMLFormElement;
+		test.form(document.querySelector('form'));
 	});
-
-	function log() {
-		console.log(formToJSON(formEl));
-	}
-	function fill() {
-		fillForm(formEl, {
-			id: '',
-			user: {
-				name: {
-					first: 'Yusaf',
-					second: 'Khaliq'
-				},
-				sex: 'male',
-				dob: new Date('1990-01-01T00:00:00.000Z'),
-				interests: ['politics', 'finance'],
-				contact: ['email'],
-				consent: false
-			}
-		});
-	}
-	function clear() {
-		clearForm(formEl);
-	}
 </script>
 
+01
+
 <form method="POST">
-	<input name="_$id" value="" type="hidden" /><br />
-	<br />
-	Name:<br />
-	First: <input name="user.name.first" /><br />
-	Second: <input name="user.name.second" /><br />
-	<br />
-	Sex:<br />
-	Male: <input name="user.sex" type="radio" value="male" /><br />
-	Female: <input name="user.sex" type="radio" value="female" /><br />
-	<br />
-	Date Of Birth:
-	<input name="user.dob(date)" /><br />
-	<br />
-	Interests<br />
-	Sports:<input name="user.interests[]" type="checkbox" value="sports" /><br />
-	Politics:<input name="user.interests[]" type="checkbox" value="politics" /><br />
-	Finance:<input name="user.interests[]" type="checkbox" value="finance" /><br />
-	<br />
-	Contact preferences<br />
-	<select name="user.contact[](string)" multiple>
-		<option disabled selected value />
-		<option value="sms">SMS</option>
-		<option value="email">email</option>
-		<option value="letter">letter</option>
-	</select><br />
-	<br />
-	Consent to share details:<br />
-	Yes: <input name="user.consent(boolean)" type="radio" value="1" /><br />
-	No: <input name="user.consent(boolean)" type="radio" value="" /><br />
+	First name:<input type="text" name="name.first" /><br />
+	Last name:<input type="text" name="name.last" /><br />
+	test:<input type="text" name="test[]" /><br />
+	test:<input type="text" name="test[](number)" /><br />
+
+	Child 1<br />
+	Name:<input type="text" name="children[0].name" /><br />
+
+	Child 2<br />
+	Name:<input type="text" name="children[1].name" /><br />
+
+	Agree:<br />
+	Yes:<input type="radio" name="agree(boolean)" value="true" />
+	No:<input type="radio" name="agree(boolean)" value="false" />
+
 	<br />
 	<input type="submit" />
-	<input type="submit" value="log" on:click|preventDefault={log} />
-	<input type="submit" value="fill" on:click|preventDefault={fill} />
-	<input type="submit" value="clear" on:click|preventDefault={clear} />
 </form>
