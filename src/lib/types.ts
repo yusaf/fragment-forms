@@ -71,7 +71,6 @@ export type CEDT<ZSchema extends AllowedZSchema> = {
 	submitData: z.infer<ZSchema>;
 	submitFormData: FormData;
 	saveData: z.infer<ZSchema>;
-	saveFormData: FormData;
 	issues: FormattedIssues<ZSchema>['issues'];
 	noPathIssues: FormattedIssues<ZSchema>['noPathIssues'];
 	canSave: boolean;

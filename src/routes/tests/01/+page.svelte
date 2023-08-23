@@ -31,10 +31,6 @@
 		console.log('e:saveData', data);
 	});
 
-	test.listen('saveFormData', function (formData) {
-		console.log('e:saveFormData', [...formData]);
-	});
-
 	test.listen('canSave', function (canSave) {
 		console.log('e:canSave', canSave);
 	});
@@ -66,4 +62,5 @@
 
 	<br />
 	<input type="submit" />
+	<button value="save" on:click|preventDefault={test.manualSaveMake()}>Save</button>
 </form>
