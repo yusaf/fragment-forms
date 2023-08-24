@@ -291,7 +291,7 @@ export function getAltNamesAndTypes(
 const coerceStringValues = {
 	string: (value: string) => '' + value,
 	number: (value: string) => (value === '' || isNaN(value as any as number) ? NaN : +value),
-	boolean: (value: string) => (value === '0' ? false : true),
+	boolean: (value: string) => (value === 'false' ? false : true),
 	date: (value: string) => new Date(value),
 	dateTime: (value: string) => new Date(value)
 };
@@ -302,7 +302,7 @@ export function coerceStringValue(value: string, coerceTo: Coercable) {
 const coerceTypeValues = {
 	string: (value: string) => '' + value,
 	number: (value: number) => '' + (isNaN(value) ? '' : value),
-	boolean: (value: boolean) => (value === false ? '0' : '1'),
+	boolean: (value: boolean) => (value === false ? 'false' : 'true'),
 	date: (value: Date) => {
 		value = typeof value === 'string' ? new Date(value) : value;
 		if (isNaN(+value)) {
@@ -511,7 +511,7 @@ export function formatIssues<ZSchema extends AllowedZSchema>(
 			const last = j === jLen - 1;
 			let currentTarget = target?.[path[j]] || {};
 			if (last) {
-				currentTarget._error = issue.message;
+				currentTarget._issue = issue.message;
 			}
 			target[path[j]] = currentTarget;
 			target = currentTarget;
@@ -663,7 +663,7 @@ export function attributes(data: FormDataStructure | null = null) {
 	const arraysCache: any = {};
 	return function (
 		name: string,
-		type: types,
+		type: types = 'text',
 		additional: Primitive | Record<string, Primitive> = {}
 	) {
 		let attrs: any = {

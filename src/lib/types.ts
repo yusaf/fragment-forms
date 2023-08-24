@@ -77,32 +77,39 @@ export type CEDT<ZSchema extends AllowedZSchema> = {
 	autoSaveTimeLeft: number;
 	values: DeepPartial<z.infer<ZSchema>>;
 	savedData: z.infer<ZSchema>;
+	saving: boolean;
+	submitting: boolean;
 };
 
 export type CEDTCB<ZSchema extends AllowedZSchema> = {
 	[key in keyof CEDT<ZSchema>]: (detail: CEDT<ZSchema>[key]) => void;
+};
+export type CEDTD<ZSchema extends AllowedZSchema> = {
+	[key in keyof CEDT<ZSchema>]: () => CEDT<ZSchema>[key];
 };
 
 type KeyValueObject = { [key: string]: any };
 
 type SchemaArrayToIssues<Arr extends any[]> = Arr extends (infer Inner)[]
 	? Inner extends Primitive
-		? { [key: number]: string; _error: string }
+		? { [key: number]: { _issue: string }; _issue: string }
 		: Inner extends any[]
-		? SchemaArrayToIssues<(Inner & { _error: string })[]>
+		? SchemaArrayToIssues<(Inner & { _issue: string })[]>
 		: Inner extends KeyValueObject
-		? SchemaObjectToIssues<Inner & { _error: string }>[] & { _error: string }
+		? SchemaObjectToIssues<Inner & { _issue: string }>[] & { _issue: string }
 		: never
 	: never;
 
 type SchemaObjectToIssues<Schema> = Schema extends KeyValueObject
 	? {
-			[key in keyof Schema]?: Schema[key] extends Primitive
-				? { _error: string }
+			[key in keyof Schema]?: key extends '_issue'
+				? Schema[key]
+				: Schema[key] extends Primitive
+				? { _issue: string }
 				: Schema[key] extends any[]
 				? SchemaArrayToIssues<Schema[key]>
 				: Schema[key] extends KeyValueObject
-				? SchemaObjectToIssues<Schema[key] & { _error: string }>
+				? SchemaObjectToIssues<Schema[key] & { _issue: string }>
 				: never;
 	  }
 	: never;

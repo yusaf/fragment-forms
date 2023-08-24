@@ -38,6 +38,9 @@
 	test.listen('autoSaveTimeLeft', function (timeLeft) {
 		console.log('e:autoSaveTimeLeft', timeLeft);
 	});
+	test.listen('values', function (values) {
+		console.log('e:values', values);
+	});
 
 	onMount(function () {
 		test.form(document.querySelector('form'));
