@@ -332,13 +332,13 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 					if (last) {
 						delete target?.[path[i]];
 						break;
-					}
+					} //
 					target = target?.[path[i]];
 				}
 			}
 			_this._dispatch('values', () => formToJSON(_this._form));
 			_this._setIssues({ issues: currentIssues, noPathIssues: [] });
-			if (!('error' in zodIssues)) {
+			if (!lastWasError) {
 				_this._commitToSaveValues(data);
 			}
 		};

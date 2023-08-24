@@ -42,6 +42,8 @@
 	onMount(function () {
 		test.form(document.querySelector('form'));
 	});
+
+	$: console.log($issues);
 </script>
 
 02
@@ -59,12 +61,15 @@
 	Last name:<input {...attrs('name.last')} /><br />
 
 	Child 1<br />
+	<Issue issue={$issues?.children?.[0]?.name?._issue} />
 	Name:<input {...attrs('children[0].name')} /><br />
 
 	Child 2<br />
+	<Issue issue={$issues?.children?.[1]?.name?._issue} />
 	Name:<input {...attrs('children[1].name')} /><br />
 
 	Agree:<br />
+	<Issue issue={$issues?.agree?._issue} />
 	Yes:<input {...attrs('agree(boolean)', 'radio', true)} />
 	No:<input {...attrs('agree(boolean)', 'radio', false)} />
 

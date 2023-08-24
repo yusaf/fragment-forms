@@ -92,11 +92,11 @@ type KeyValueObject = { [key: string]: any };
 
 type SchemaArrayToIssues<Arr extends any[]> = Arr extends (infer Inner)[]
 	? Inner extends Primitive
-		? { [key: number]: { _issue: string }; _issue: string }
+		? { [key: number]: { _issue?: string }; _issue?: string; _issue_in?: string }
 		: Inner extends any[]
-		? SchemaArrayToIssues<(Inner & { _issue: string })[]>
+		? SchemaArrayToIssues<(Inner & { _issue?: string; _issue_in?: string })[]>
 		: Inner extends KeyValueObject
-		? SchemaObjectToIssues<Inner & { _issue: string }>[] & { _issue: string }
+		? SchemaObjectToIssues<Inner & { _issue?: string }>[] & { _issue?: string; _issue_in?: string }
 		: never
 	: never;
 
@@ -105,11 +105,11 @@ type SchemaObjectToIssues<Schema> = Schema extends KeyValueObject
 			[key in keyof Schema]?: key extends '_issue'
 				? Schema[key]
 				: Schema[key] extends Primitive
-				? { _issue: string }
+				? { _issue?: string }
 				: Schema[key] extends any[]
 				? SchemaArrayToIssues<Schema[key]>
 				: Schema[key] extends KeyValueObject
-				? SchemaObjectToIssues<Schema[key] & { _issue: string }>
+				? SchemaObjectToIssues<Schema[key] & { _issue?: string }>
 				: never;
 	  }
 	: never;

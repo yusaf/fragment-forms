@@ -488,6 +488,40 @@ export function debounce(
 	];
 }
 
+// export function formatIssues<ZSchema extends AllowedZSchema>(
+// 	issues: any
+// ): FormattedIssues<ZSchema> {
+// 	const done: any = {};
+// 	const formattedIssues: any = {};
+// 	const noPathIssues: string[] = [];
+// 	for (let i = 0, iLen = issues.length; i < iLen; i++) {
+// 		const issue = issues[i] as z.ZodIssue & { type?: string; expected?: string };
+// 		const path = issue?.path;
+// 		if (!path.length) {
+// 			noPathIssues.push(issue.message);
+// 			continue;
+// 		}
+// 		const key = path.join('-');
+// 		if (done.hasOwnProperty(key)) {
+// 			continue;
+// 		}
+// 		done[key] = true;
+// 		let target: any = formattedIssues;
+// 		for (let j = 0, jLen = path.length; j < jLen; j++) {
+// 			const last = j === jLen - 1;
+// 			let currentTarget = target?.[path[j]] || {};
+// 			if (last) {
+// 				currentTarget._issue = issue.message;
+// 			}
+// 			target[path[j]] = currentTarget;
+// 			target = currentTarget;
+// 		}
+// 	}
+// 	return {
+// 		issues: formattedIssues,
+// 		noPathIssues
+// 	};
+// }
 export function formatIssues<ZSchema extends AllowedZSchema>(
 	issues: any
 ): FormattedIssues<ZSchema> {
@@ -504,13 +538,18 @@ export function formatIssues<ZSchema extends AllowedZSchema>(
 		const key = path.join('-');
 		if (done.hasOwnProperty(key)) {
 			continue;
-		}
+		} //
 		done[key] = true;
+
+		const isArray = !isNaN(path[path.length - 1] as number);
 		let target: any = formattedIssues;
 		for (let j = 0, jLen = path.length; j < jLen; j++) {
 			const last = j === jLen - 1;
+			const secondToLast = j === jLen - 2;
 			let currentTarget = target?.[path[j]] || {};
-			if (last) {
+			if (secondToLast && isArray) {
+				currentTarget._issue_in = issue.message;
+			} else if (last) {
 				currentTarget._issue = issue.message;
 			}
 			target[path[j]] = currentTarget;
@@ -522,7 +561,6 @@ export function formatIssues<ZSchema extends AllowedZSchema>(
 		noPathIssues
 	};
 }
-
 export function getSchemaObject<Schema extends z.ZodTypeAny>(schema: Schema): z.AnyZodObject {
 	let schemaObject = schema;
 	while (
