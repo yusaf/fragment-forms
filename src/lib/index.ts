@@ -261,7 +261,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			let inputIndex;
 
 			if (input.nodeName.toLowerCase() === 'select') {
-				inputIndex = (input as HTMLSelectElement).selectedIndex;
+				inputIndex = 0;
 			} else {
 				const allInputs = [
 					...(_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`)
@@ -275,6 +275,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				)
 			);
 
+			lastWasError = false;
 			const data = modifiedEntriesToJSON(modifyEntries(entries));
 			const currentIssues = _this._issues;
 			const zodIssues = _this._opts.saveSchema.safeParse(data);
@@ -320,16 +321,13 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				}
 			}
 			if (!lastWasError) {
-				lastWasError = false;
 				let target: any = currentIssues;
 				for (let i = 0, iLen = path.length; i < iLen; i++) {
 					const last = i === iLen - 1;
 					const secondToLast = i === iLen - 2;
-					// if (secondToLast && isArray) {
-					// 	delete target?.[path[i]];
-					// 	break;
-					// } else
-					if (last) {
+					if (secondToLast && isArray) {
+						delete target?.[path[i]]?._issue_in;
+					} else if (last) {
 						delete target?.[path[i]];
 						break;
 					}

@@ -4,6 +4,7 @@ const requiredString = z.string().nonempty('Required');
 
 export default z
 	.object({
+		id: requiredString,
 		username: requiredString.min(3),
 		password: requiredString.min(6),
 		confirm_password: requiredString.min(6),

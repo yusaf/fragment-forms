@@ -53,7 +53,7 @@
 {/if}
 
 <form method="POST">
-	<input {...attrs('_$id', 'hidden')} /><br />
+	<input {...attrs('_$id', 'hidden', 'random-id')} /><br />
 	<br />
 	Username:<br />
 	<Issue issue={$issues?.username?._issue} />
@@ -73,7 +73,7 @@
 	Name:<br />
 	<Issue issue={$issues?.user?.name?.first?._issue} />
 	First: <input {...attrs('user.name.first', 'text')} /><br />
-	<Issue issue={$issues?.user?.name?.first?._issue} />
+	<Issue issue={$issues?.user?.name?.last?._issue} />
 	Last: <input {...attrs('user.name.last', 'text')} /><br />
 	<br />
 	Sex:<br />
