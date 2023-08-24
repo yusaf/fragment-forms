@@ -274,6 +274,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 					`[name="${name}"], ${alwaysSelectors(name)}`
 				)
 			);
+
 			const data = modifiedEntriesToJSON(modifyEntries(entries));
 			const currentIssues = _this._issues;
 			const zodIssues = _this._opts.saveSchema.safeParse(data);
@@ -283,24 +284,23 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			if (isArray) {
 				path[path.length - 1] = inputIndex as any as string;
 			}
-			let foundIssue = false;
+			let foundIssue = isArray ? false : true;
 			if ('error' in zodIssues) {
 				lastWasError = true;
 				const issues = zodIssues.error.issues;
-				let issue = issues[0] as ZodIssue & { type?: string; expected?: string };
+				let issue: ZodIssue = issues[0];
 				if (isArray) {
 					for (let i = 0, iLen = issues.length; i < iLen; i++) {
 						const _issue = issues[i];
 						const lastInPath = _issue?.path[_issue?.path?.length - 1];
 						if (lastInPath === inputIndex) {
-							issue = _issue as ZodIssue & { type?: string; expected?: string };
+							issue = _issue;
 							foundIssue = true;
 							break;
 						}
 					}
-				} else {
-					foundIssue = true;
 				}
+
 				if (foundIssue) {
 					let target: any = currentIssues;
 					for (let i = 0, iLen = path.length; i < iLen; i++) {

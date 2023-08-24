@@ -529,7 +529,7 @@ export function formatIssues<ZSchema extends AllowedZSchema>(
 	const formattedIssues: any = {};
 	const noPathIssues: string[] = [];
 	for (let i = 0, iLen = issues.length; i < iLen; i++) {
-		const issue = issues[i] as z.ZodIssue & { type?: string; expected?: string };
+		const issue: z.ZodIssue = issues[i];
 		const path = issue?.path;
 		if (!path.length) {
 			noPathIssues.push(issue.message);
