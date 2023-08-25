@@ -10,7 +10,7 @@
 	const test = new FragmentForms({
 		schema,
 		save: true,
-		autoSaveTimeout: 5000
+		autoSaveTimeout: 2000
 	});
 
 	const saving = writable<typeof test.types.saving>(false);
@@ -34,7 +34,7 @@
 	});
 
 	test.listen('saveData', function (data) {
-		console.log('e:saveData', data);
+		// console.log('e:saveData', data);
 	});
 
 	onMount(function () {
@@ -65,6 +65,7 @@
 	<Issue issue={$issues?.confirm_password?._issue} />
 	<input {...attrs('confirm_password', 'password')} /><br />
 	Secret words:<br />
+	<Issue issue={$issues?.secrets?._issue} />
 	{#each { length: 3 } as _, index}
 		<Issue issue={$issues?.secrets?.[index]?._issue} />
 		Secret {index + 1}: <input {...attrs('secrets[]')} /><br />

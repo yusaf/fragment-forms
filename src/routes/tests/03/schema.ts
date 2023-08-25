@@ -15,7 +15,7 @@ export default z
 			}),
 			sex: z.enum(['male', 'female']),
 			dob: z.date(),
-			interests: z.array(z.string()).min(1),
+			interests: z.array(z.string()).min(2),
 			contact: z.array(z.enum(['sms', 'email', 'letter'])).min(1),
 			consent: z.boolean()
 		}),

@@ -24,11 +24,13 @@ import {
 	nameToPath,
 	sliceCoerceTypeFromName,
 	extend,
+	addOrRemoveSaveValues,
 	contains,
 	clearForm,
 	fillForm,
 	formToJSON,
-	attributes
+	attributes,
+	clearEmpties
 } from './utils.js';
 import type { ZodIssue } from 'zod';
 
@@ -60,6 +62,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _noPathIssues: string[] = [];
 	private _issues: any = {};
 
+	private _alwaysIncludeValues = {};
 	private _values: any = {};
 	private _valuesToSave: any = {};
 	private _valuesSavedHistory: any = {};
@@ -239,7 +242,6 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			lastInput = e.target;
 		};
 
-		let lastWasError = false;
 		const onInputDebounce = function (e: InputEvent) {
 			if (_this._formDisabled) {
 				return;
@@ -260,85 +262,102 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 			let inputIndex;
 
+			const allInputs = (_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`);
+
 			if (input.nodeName.toLowerCase() === 'select') {
 				inputIndex = 0;
 			} else {
-				const allInputs = [
-					...(_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`)
-				];
-				inputIndex = allInputs.indexOf(input);
+				inputIndex = [...allInputs].indexOf(input);
 			}
 
-			const entries = toEntries(
-				(_this._form as HTMLFormElement).querySelectorAll(
-					`[name="${name}"], ${alwaysSelectors(name)}`
-				)
-			);
-
-			lastWasError = false;
-			const data = modifiedEntriesToJSON(modifyEntries(entries));
-			const currentIssues = _this._issues;
-			const zodIssues = _this._opts.saveSchema.safeParse(data);
+			const entries = toEntries(allInputs);
+			let data = modifiedEntriesToJSON(modifyEntries(entries));
 			const path = nameToPath(sliceCoerceTypeFromName(name)[0]);
+			const altPath = [...path];
+			const isArray = altPath[altPath.length - 1] === '';
 
-			const isArray = path[path.length - 1] === '';
+			let issuesFound = _this._issues;
+
 			if (isArray) {
-				path[path.length - 1] = inputIndex as any as string;
+				altPath[altPath.length - 1] = inputIndex as any as string;
 			}
-			let foundIssue = isArray ? false : true;
+
+			let target: any = issuesFound;
+			for (let i = 0, iLen = altPath.length; i < iLen; i++) {
+				const last = i === iLen - 1;
+				const secondToLast = i === iLen - 2;
+				if (secondToLast && isArray) {
+					delete target?.[altPath[i]]?._issue;
+					delete target?.[altPath[i]]?._issue_in;
+				} else if (last) {
+					delete target?.[altPath[i]];
+					break;
+				}
+				target = target?.[altPath[i]];
+			}
+
+			const zodIssues = _this._opts.saveSchema.safeParse(data);
+
 			if ('error' in zodIssues) {
-				lastWasError = true;
+				issuesFound = extend(_this._issues, formatIssues(zodIssues.error.issues).issues);
 				const issues = zodIssues.error.issues;
-				let issue: ZodIssue = issues[0];
-				if (isArray) {
-					for (let i = 0, iLen = issues.length; i < iLen; i++) {
-						const _issue = issues[i];
-						const lastInPath = _issue?.path[_issue?.path?.length - 1];
-						if (lastInPath === inputIndex) {
-							issue = _issue;
-							foundIssue = true;
+				const donePaths: any = {};
+				for (let i = 0, iLen = issues.length; i < iLen; i++) {
+					const path = issues[i].path;
+					let target: any = data;
+					const pathDoneKey = path.join('-');
+					if (donePaths.hasOwnProperty(pathDoneKey)) {
+						continue;
+					}
+					donePaths[pathDoneKey] = true;
+					for (let j = 0, jLen = path.length; j < jLen; j++) {
+						const key = path[j];
+						const last = j === jLen - 1;
+						if (last) {
+							delete target?.[key];
 							break;
 						}
+						target = target?.[key];
 					}
 				}
+				data = clearEmpties(data);
+			}
 
-				if (foundIssue) {
-					let target: any = currentIssues;
-					for (let i = 0, iLen = path.length; i < iLen; i++) {
-						const last = i === iLen - 1;
-						const secondToLast = i === iLen - 2;
-						let currentTarget = target?.[path[i]] || {};
-						if (secondToLast && isArray) {
-							currentTarget._issue_in = issue.message;
-						} else if (last) {
-							currentTarget._issue = issue.message;
-						}
-						target[path[i]] = currentTarget;
-						target = currentTarget;
-					}
-				} else {
-					lastWasError = false;
+			const dataEmpty = Object.keys(data).length === 0;
+
+			if (!dataEmpty) {
+				const entries = toEntries(
+					(_this._form as HTMLFormElement).querySelectorAll(alwaysSelectors(name))
+				);
+				if (entries.length) {
+					_this._alwaysIncludeValues = extend(
+						_this._alwaysIncludeValues,
+						modifiedEntriesToJSON(modifyEntries(entries))
+					);
 				}
 			}
-			if (!lastWasError) {
-				let target: any = currentIssues;
-				for (let i = 0, iLen = path.length; i < iLen; i++) {
-					const last = i === iLen - 1;
-					const secondToLast = i === iLen - 2;
-					if (secondToLast && isArray) {
-						delete target?.[path[i]]?._issue_in;
-					} else if (last) {
-						delete target?.[path[i]];
-						break;
-					}
-					target = target?.[path[i]];
-				}
-			}
+
+			// console.log('DATA', structuredClone(data));
+			// console.log('VALUE BEFORE', structuredClone(_this._valuesToSave));
+			_this._valuesToSave = addOrRemoveSaveValues(path, _this._valuesToSave, data);
+			// console.log('VALUE AFTER', structuredClone(_this._valuesToSave));
+
 			_this._dispatch('values', () => formToJSON(_this._form));
-			_this._setIssues({ issues: currentIssues, noPathIssues: [] });
-			if (!('error' in zodIssues)) {
-				_this._commitToSaveValues(data);
+			_this._setIssues({ issues: issuesFound, noPathIssues: [] });
+
+			if (contains(_this._valuesSavedHistory, _this._valuesToSave)) {
+				_this._resetValuesToSave();
+				_this._setSaveStatus(false);
+				_this._clearAutoSaveDebounce();
+			} //
+			else if (_this._opts.autoSaveTimeout) {
+				_this._startAutosaveTimer();
+			} //
+			else {
+				_this._setSaveStatus(true);
 			}
+
+			return;
 		};
 
 		const [onInputDebounced, clearDebounce] = debounce(onInputDebounce, this._opts.debounce);
@@ -350,32 +369,16 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		this.addEventListener('input', onInputDebounced as any);
 		if (this._opts.autoSaveTimeout) {
 			const [autoSaveDebounce, _clearAutoSaveDebounce] = debounce(function () {
-				if (!lastWasError && Object.keys(_this._valuesToSave).length) {
-					_this._dispatch('saveData', () => _this._valuesToSave);
-				}
+				_this._dispatchSaveData();
 			}, this._opts.autoSaveTimeout);
 			this._clearAutoSaveDebounce = _clearAutoSaveDebounce;
 			this.addEventListener('input', autoSaveDebounce);
 		}
 	}
 
-	private _commitToSaveValues(data: any) {
-		this._valuesToSave = extend(this._valuesToSave, data);
-		if (contains(this._valuesSavedHistory, this._valuesToSave)) {
-			this._resetValuesToSave();
-			this._setSaveStatus(false);
-			this._clearAutoSaveDebounce();
-		} //
-		else if (this._opts.autoSaveTimeout) {
-			this._startAutosaveTimer();
-		} //
-		else {
-			this._setSaveStatus(true);
-		}
-	}
-
 	private _resetValuesToSave() {
 		this._valuesToSave = {};
+		this._alwaysIncludeValues = {};
 		return this;
 	}
 
@@ -391,13 +394,9 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	private _startAutosaveTimer() {
 		const _this = this;
-
 		this._setSaveStatus(true);
-
 		this._autoSaveTimerCurrentNumber = this._autoSaveTimerStartNumber;
-
 		this._dispatch('autoSaveTimeLeft', () => this._autoSaveTimerCurrentNumber--);
-
 		this._autoSaveNumberTimer = setInterval(function () {
 			_this._dispatch('autoSaveTimeLeft', () => _this._autoSaveTimerCurrentNumber--);
 			if (_this._autoSaveTimerCurrentNumber === -1) {
@@ -522,6 +521,11 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
+	private _dispatchSaveData() {
+		this._dispatch('saveData', () => this._valuesToSave);
+		return this;
+	}
+
 	public manualSave() {
 		if (this._formDisabled) {
 			return;
@@ -530,8 +534,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			return;
 		}
 		this.cancelSave();
-		this._dispatch('saveData', () => this._valuesToSave);
-		return this;
+		this._dispatchSaveData();
 	}
 
 	public manualSaveMake() {

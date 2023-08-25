@@ -24,6 +24,7 @@ import {
 	nameToPath,
 	sliceCoerceTypeFromName,
 	extend,
+	extendUsingPath,
 	contains,
 	clearForm,
 	fillForm,
@@ -263,10 +264,8 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			if (input.nodeName.toLowerCase() === 'select') {
 				inputIndex = 0;
 			} else {
-				const allInputs = [
-					...(_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`)
-				];
-				inputIndex = allInputs.indexOf(input);
+				const allInputs = (_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`);
+				inputIndex = [...allInputs].indexOf(input);
 			}
 
 			const entries = toEntries(
@@ -274,14 +273,14 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 					`[name="${name}"], ${alwaysSelectors(name)}`
 				)
 			);
-
-			lastWasError = false;
-			const data = modifiedEntriesToJSON(modifyEntries(entries));
-			const currentIssues = _this._issues;
-			const zodIssues = _this._opts.saveSchema.safeParse(data);
+			const _data = modifiedEntriesToJSON(modifyEntries(entries));
 			const path = nameToPath(sliceCoerceTypeFromName(name)[0]);
+			const data = extendUsingPath(path, _this._valuesToSave, _data);
 
 			const isArray = path[path.length - 1] === '';
+			lastWasError = false;
+			const currentIssues = _this._issues;
+			const zodIssues = _this._opts.saveSchema.safeParse(data);
 			if (isArray) {
 				path[path.length - 1] = inputIndex as any as string;
 			}
@@ -326,9 +325,8 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 					const last = i === iLen - 1;
 					const secondToLast = i === iLen - 2;
 					if (secondToLast && isArray) {
-						// console.log('DATA', data);
-						// console.log('HERE 1', zodIssues);
-						// console.log(name);
+						console.log('DATA', structuredClone(data));
+						console.log('ISSUES', zodIssues);
 						delete target?.[path[i]]?._issue;
 						delete target?.[path[i]]?._issue_in;
 					} else if (last) {

@@ -24,6 +24,7 @@ import {
 	nameToPath,
 	sliceCoerceTypeFromName,
 	extend,
+	extendUsingPath,
 	contains,
 	clearForm,
 	fillForm,
@@ -60,6 +61,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _noPathIssues: string[] = [];
 	private _issues: any = {};
 
+	private _alwaysIncludeValues = {};
 	private _values: any = {};
 	private _valuesToSave: any = {};
 	private _valuesSavedHistory: any = {};
@@ -260,75 +262,56 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 			let inputIndex;
 
+			const allInputs = (_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`);
+
 			if (input.nodeName.toLowerCase() === 'select') {
 				inputIndex = 0;
 			} else {
-				const allInputs = [
-					...(_this._form as HTMLFormElement).querySelectorAll(`[name="${name}"]`)
-				];
-				inputIndex = allInputs.indexOf(input);
+				inputIndex = [...allInputs].indexOf(input);
 			}
 
-			const entries = toEntries(
-				(_this._form as HTMLFormElement).querySelectorAll(
-					`[name="${name}"], ${alwaysSelectors(name)}`
-				)
-			);
-
-			lastWasError = false;
-			const data = modifiedEntriesToJSON(modifyEntries(entries));
-			const currentIssues = _this._issues;
-			const zodIssues = _this._opts.saveSchema.safeParse(data);
+			const entries = toEntries(allInputs);
+			const _data = modifiedEntriesToJSON(modifyEntries(entries));
 			const path = nameToPath(sliceCoerceTypeFromName(name)[0]);
+			let data = extendUsingPath(path, _this._valuesToSave, _data);
+
+			const dataHasValues = Object.keys(data).length;
+
+			if (dataHasValues) {
+				const entries = toEntries(
+					(_this._form as HTMLFormElement).querySelectorAll(alwaysSelectors(name))
+				);
+				if (entries.length) {
+					_this._alwaysIncludeValues = extend(
+						_this._alwaysIncludeValues,
+						modifiedEntriesToJSON(modifyEntries(entries))
+					);
+				}
+			}
+			_this._valuesToSave = data;
 
 			const isArray = path[path.length - 1] === '';
 			if (isArray) {
 				path[path.length - 1] = inputIndex as any as string;
 			}
-			let foundIssue = isArray ? false : true;
+
+			lastWasError = false;
+
+			const zodIssues = _this._opts.saveSchema.safeParse(data);
+
+			let issuesFound = _this._issues;
 			if ('error' in zodIssues) {
 				lastWasError = true;
-				const issues = zodIssues.error.issues;
-				let issue: ZodIssue = issues[0];
-				if (isArray) {
-					for (let i = 0, iLen = issues.length; i < iLen; i++) {
-						const _issue = issues[i];
-						const lastInPath = _issue?.path[_issue?.path?.length - 1];
-						if (lastInPath === inputIndex) {
-							issue = _issue;
-							foundIssue = true;
-							break;
-						}
-					}
-				}
+				// issuesFound = extend(_this._issues, formatIssues(zodIssues.error.issues).issues);
 
-				if (foundIssue) {
-					let target: any = currentIssues;
-					for (let i = 0, iLen = path.length; i < iLen; i++) {
-						const last = i === iLen - 1;
-						const secondToLast = i === iLen - 2;
-						let currentTarget = target?.[path[i]] || {};
-						if (secondToLast && isArray) {
-							currentTarget._issue_in = issue.message;
-						} else if (last) {
-							currentTarget._issue = issue.message;
-						}
-						target[path[i]] = currentTarget;
-						target = currentTarget;
-					}
-				} else {
-					lastWasError = false;
-				}
-			}
-			if (!lastWasError) {
-				let target: any = currentIssues;
+				console.log(path);
+				console.log(formatIssues(zodIssues.error.issues).issues);
+			} else {
+				let target: any = issuesFound;
 				for (let i = 0, iLen = path.length; i < iLen; i++) {
 					const last = i === iLen - 1;
 					const secondToLast = i === iLen - 2;
 					if (secondToLast && isArray) {
-						// console.log('DATA', data);
-						// console.log('HERE 1', zodIssues);
-						// console.log(name);
 						delete target?.[path[i]]?._issue;
 						delete target?.[path[i]]?._issue_in;
 					} else if (last) {
@@ -338,9 +321,10 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 					target = target?.[path[i]];
 				}
 			}
+
 			_this._dispatch('values', () => formToJSON(_this._form));
-			_this._setIssues({ issues: currentIssues, noPathIssues: [] });
-			if (!('error' in zodIssues)) {
+			_this._setIssues({ issues: issuesFound, noPathIssues: [] });
+			if (!lastWasError && !('error' in zodIssues)) {
 				_this._commitToSaveValues(data);
 			}
 		};
@@ -355,7 +339,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		if (this._opts.autoSaveTimeout) {
 			const [autoSaveDebounce, _clearAutoSaveDebounce] = debounce(function () {
 				if (!lastWasError && Object.keys(_this._valuesToSave).length) {
-					_this._dispatch('saveData', () => _this._valuesToSave);
+					_this._dispatchSaveData();
 				}
 			}, this._opts.autoSaveTimeout);
 			this._clearAutoSaveDebounce = _clearAutoSaveDebounce;
@@ -380,6 +364,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	private _resetValuesToSave() {
 		this._valuesToSave = {};
+		this._alwaysIncludeValues = {};
 		return this;
 	}
 
@@ -522,6 +507,12 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
+	private _dispatchSaveData() {
+		//CHANGE - need to extend with always incldue values
+		this._dispatch('saveData', () => this._valuesToSave);
+		return this;
+	}
+
 	public manualSave() {
 		if (this._formDisabled) {
 			return;
@@ -530,8 +521,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			return;
 		}
 		this.cancelSave();
-		this._dispatch('saveData', () => this._valuesToSave);
-		return this;
+		this._dispatchSaveData();
 	}
 
 	public manualSaveMake() {

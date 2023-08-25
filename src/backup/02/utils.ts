@@ -444,21 +444,20 @@ export function extend(target: any, source: any, first = true) {
 	return target;
 }
 
-export function addOrRemoveSaveValues(path: string[], _target: any, source: any) {
+export function extendUsingPath(path: string[], _target: any, source: any) {
 	const data = extend(_target, source);
 	const isArray = path[path.length - 1] === '';
-
 	let sourceTarget = source;
 	let target = data;
 	for (let i = 0, iLen = path.length; i < iLen; i++) {
 		const currentKey = path[i];
-		const currentSourceTarget = sourceTarget?.[currentKey] || {};
-		const currentTarget = target?.[currentKey] || {};
+		const currentSourceTarget = sourceTarget?.[currentKey];
+		const currentTarget = target?.[currentKey];
 		const last = i === iLen - 1;
 		const secondToLast = i === iLen - 2;
 		if (secondToLast && isArray) {
 			if (currentSourceTarget === undefined) {
-				target[currentKey] = [];
+				delete target[currentKey];
 			} else {
 				target[currentKey] = currentSourceTarget;
 			}
@@ -466,28 +465,21 @@ export function addOrRemoveSaveValues(path: string[], _target: any, source: any)
 		} //
 		else if (last) {
 			if (currentSourceTarget === undefined) {
-				delete target?.[currentKey];
+				delete target[currentKey];
 			} else {
 				target[currentKey] = currentSourceTarget;
 			}
 			break;
 		}
 		sourceTarget[currentKey] = currentSourceTarget;
-		sourceTarget = sourceTarget[currentKey];
 		target[currentKey] = currentTarget;
+		sourceTarget = sourceTarget[currentKey];
 		target = target[currentKey];
 	}
-
 	return clearEmpties(data);
 }
-// DON'T CHANGE CLEAR EMPTIES, HAS SPECIFIC FUNCTION,
-// WRITE ANOTHER FN IF NEED SIMILAR FUNCTIONALITY
-export function clearEmpties(o: any) {
+function clearEmpties(o: any) {
 	for (let k in o) {
-		if (o?.[k] === undefined) {
-			delete o?.[k];
-		}
-
 		if (!o[k] || typeof o[k] !== 'object') {
 			continue;
 		}
