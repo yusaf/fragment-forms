@@ -25,6 +25,7 @@ import {
 	sliceCoerceTypeFromName,
 	extend,
 	addOrRemoveSaveValues,
+	extendAlwaysValuesOntoSaveDate,
 	contains,
 	clearForm,
 	fillForm,
@@ -258,6 +259,9 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 					return;
 				}
 			}
+
+			const noSave = input?.dataset.hasOwnProperty('noSave');
+
 			lastInput = null;
 
 			let inputIndex;
@@ -337,10 +341,12 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				}
 			}
 
-			// console.log('DATA', structuredClone(data));
-			// console.log('VALUE BEFORE', structuredClone(_this._valuesToSave));
-			_this._valuesToSave = addOrRemoveSaveValues(path, _this._valuesToSave, data);
-			// console.log('VALUE AFTER', structuredClone(_this._valuesToSave));
+			if (!noSave) {
+				// console.log('DATA', structuredClone(data));
+				// console.log('VALUE BEFORE', structuredClone(_this._valuesToSave));
+				_this._valuesToSave = addOrRemoveSaveValues(path, _this._valuesToSave, data);
+				// console.log('VALUE AFTER', structuredClone(_this._valuesToSave));
+			}
 
 			_this._dispatch('values', () => formToJSON(_this._form));
 			_this._setIssues({ issues: issuesFound, noPathIssues: [] });
@@ -522,7 +528,13 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	}
 
 	private _dispatchSaveData() {
-		this._dispatch('saveData', () => this._valuesToSave);
+		console.log(this._alwaysIncludeValues);
+		const saveData = extendAlwaysValuesOntoSaveDate(
+			this._valuesToSave,
+			this._alwaysIncludeValues,
+			true
+		);
+		this._dispatch('saveData', () => saveData);
 		return this;
 	}
 

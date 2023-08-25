@@ -444,6 +444,7 @@ export function extend(target: any, source: any, first = true) {
 	return target;
 }
 
+// Function needs original path, do not use altered paths with indexes
 export function addOrRemoveSaveValues(path: string[], _target: any, source: any) {
 	const data = extend(_target, source);
 	const isArray = path[path.length - 1] === '';
@@ -488,7 +489,7 @@ export function clearEmpties(o: any) {
 			delete o?.[k];
 		}
 
-		if (!o[k] || typeof o[k] !== 'object') {
+		if (!o[k] || typeof o[k] !== 'object' || o[k] instanceof Date) {
 			continue;
 		}
 
@@ -499,6 +500,35 @@ export function clearEmpties(o: any) {
 	}
 	return o;
 }
+
+function isPrimitive(value: any) {
+	return ['string', 'number', 'boolean', 'date'].includes(narrowTypeof(value));
+}
+
+export function extendAlwaysValuesOntoSaveDate(target: any, source: any, first = false) {
+	if (first) {
+		target = structuredClone(target);
+		source = structuredClone(source);
+	}
+
+	for (let key in source) {
+		const targetHasKey = target.hasOwnProperty(key);
+		const sourceIsPrimitive = isPrimitive(source[key]);
+		const sourceIsObject = sourceIsPrimitive ? false : narrowTypeof(source[key]) === 'object';
+		const sourceIsArray = sourceIsPrimitive ? false : narrowTypeof(source[key]) === 'array';
+		if (!targetHasKey && sourceIsPrimitive) {
+			target[key] = source[key];
+			continue;
+		}
+		if (targetHasKey && (sourceIsObject || sourceIsArray)) {
+			target[key] = extendAlwaysValuesOntoSaveDate(target[key], source[key]);
+			continue;
+		}
+	}
+
+	return target;
+}
+
 const alwaysPrefix = '_$';
 export function alwaysSelectors(name: string) {
 	const path = nameToPath(name);
@@ -518,7 +548,7 @@ export function alwaysSelectors(name: string) {
 			currentSelector += `${i === 0 ? '' : '.'}${key}`;
 			selectors.push(`${currentSelector}.${alwaysPrefix}`);
 		} else {
-			selectors.push(`${currentSelector}_$[`);
+			// selectors.push(`${currentSelector}_$[`); always for entire array, too erroneous
 			currentSelector += `[${key}]`;
 			selectors.push(`${currentSelector}.${alwaysPrefix}`);
 		}

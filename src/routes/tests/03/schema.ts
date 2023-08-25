@@ -19,6 +19,14 @@ export default z
 			contact: z.array(z.enum(['sms', 'email', 'letter'])).min(1),
 			consent: z.boolean()
 		}),
+		children: z.array(
+			z.object({
+				name: z.object({
+					first: requiredString.min(4),
+					last: requiredString.min(4)
+				})
+			})
+		),
 		secrets: z.array(requiredString.min(2)),
 		do: z.object({
 			you: z.object({

@@ -34,7 +34,9 @@
 	});
 
 	test.listen('saveData', function (data) {
-		// console.log('e:saveData', data);
+		console.log('e:saveData', data);
+		// test.saveStart();
+		// test.saveSuccess();
 	});
 
 	onMount(function () {
@@ -60,10 +62,10 @@
 	<input {...attrs('username', 'text')} /><br />
 	Password:<br />
 	<Issue issue={$issues?.password?._issue} />
-	<input {...attrs('password', 'password')} /><br />
+	<input {...attrs('password', 'password', { 'data-no-save': true })} /><br />
 	Confirm Password:<br />
 	<Issue issue={$issues?.confirm_password?._issue} />
-	<input {...attrs('confirm_password', 'password')} /><br />
+	<input {...attrs('confirm_password', 'password', { 'data-no-save': true })} /><br />
 	Secret words:<br />
 	<Issue issue={$issues?.secrets?._issue} />
 	{#each { length: 3 } as _, index}
@@ -72,6 +74,7 @@
 	{/each}
 	<br />
 	Name:<br />
+	<input {...attrs('user.name._$id', 'hidden', 'random-user-name-id')} /><br />
 	<Issue issue={$issues?.user?.name?.first?._issue} />
 	First: <input {...attrs('user.name.first', 'text')} /><br />
 	<Issue issue={$issues?.user?.name?.last?._issue} />
@@ -101,6 +104,19 @@
 		<option {...attrs('user.contact[]', 'option', 'letter')} value="Letter">Letter</option>
 	</select><br />
 	<br />
+
+	Children<br />
+
+	{#each { length: 3 } as _, index}
+		Name:<br />
+		<input {...attrs(`children[${index}]._$id`, 'hidden', `random-child-id-${index}`)} /><br />
+		<Issue issue={$issues?.children?.[index]?.name?.first?._issue} />
+		First: <input {...attrs(`children[${index}].name.first`, 'text')} /><br />
+		<Issue issue={$issues?.children?.[index]?.name?.last?._issue} />
+		Last: <input {...attrs(`children[${index}].name._$last`, 'text')} /><br />
+		<br />
+	{/each}
+
 	Consent to share details:<br />
 	<Issue issue={$issues?.user?.consent?._issue} />
 	Yes:
