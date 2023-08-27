@@ -57,6 +57,7 @@ export type FragmentFormsConstructorOpts<ZSchema extends AllowedZSchema> = {
 	data?: any;
 	submitSuccessTimeout?: number;
 	saveSuccessTimeout?: number;
+	enhance?: boolean;
 };
 
 export type FragmentFormsOpts = {
@@ -68,6 +69,7 @@ export type FragmentFormsOpts = {
 	data: any;
 	submitSuccessTimeout: number;
 	saveSuccessTimeout: number;
+	enhance: boolean;
 };
 
 export type AddEventListenerArgs = Parameters<HTMLFormElement['addEventListener']>;

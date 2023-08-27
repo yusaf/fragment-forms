@@ -46,7 +46,8 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		save: false, // enable save, if autoSaveTimeout is > 0 , automatically true
 		data: null, // data returned from progessive enhancement
 		submitSuccessTimeout: 0, // default 0 to disable
-		saveSuccessTimeout: 3000 // 0 to disabled
+		saveSuccessTimeout: 3000, // 0 to disabled
+		enhance: true // adds on submit event to prevent default browser submit behaviour
 	};
 
 	private _formDisabled: boolean = false;
@@ -121,7 +122,9 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				this._waitingEventListeners[i] = null;
 			}
 		}
-		// this._onSubmit();
+		if (this._opts.enhance) {
+			this._onSubmit();
+		}
 		this._onInput();
 		this._setSaveStatus(false);
 		return this;
@@ -139,15 +142,20 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		}
 		return this;
 	}
-	public cleanUp() {
-		if (!isBrowser) {
-			return this;
-		}
+
+	private _clearTimers() {
 		clearTimeout(this._submitSuccessTimeout);
 		clearTimeout(this._saveSuccessTimeout);
 		this._cancelAutoSaveTimer();
 		this._clearAutoSaveDebounce();
 		this._onInputTimeout();
+		return this;
+	}
+	public cleanUp() {
+		if (!isBrowser) {
+			return this;
+		}
+		this._clearTimers();
 		if (this._form) {
 			for (let i = 0, iLen = this._addedEventListeners.length; i < iLen; i++) {
 				this._form.removeEventListener(...this._addedEventListeners[i]);
@@ -236,7 +244,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 				_this._setIssues(formatIssues(zodIssues.error.issues));
 			} else {
 				_this._dispatch('submitData', () => data);
-				_this._dispatch('submitFormData', () => entriesToFormData(entries));
+				_this._dispatch('submitFormData', () => formData);
 			}
 		});
 	}
@@ -482,8 +490,12 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	}
 
 	public clear(skip: boolean = false) {
+		this._clearTimers();
+		this._setIssues({
+			issues: {} as any,
+			noPathIssues: []
+		});
 		this._resetValuesToSave();
-		this._clearAutoSaveDebounce();
 		if (skip) {
 			this._setValuesSavedHistory({});
 		}
@@ -499,7 +511,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
-	public cancelSave() {
+	public cancelAutoSave() {
 		this._setSaveStatus(false);
 		this._clearAutoSaveDebounce();
 		this._cancelAutoSaveTimer();
@@ -532,7 +544,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	public saveStart() {
 		this.disableAll();
-		this.cancelSave();
+		this.cancelAutoSave();
 		this._dispatch('saving', () => true);
 		this._dispatchSaveSuccess(undefined);
 		return this;
@@ -558,7 +570,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 
 	public submitStart() {
 		this.disableAll();
-		this.cancelSave();
+		this.cancelAutoSave();
 		this._dispatch('submitting', () => true);
 		this._dispatchSubmitSuccess(undefined);
 		return this;
@@ -583,6 +595,9 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	}
 
 	private _dispatchSaveData() {
+		if (this._formDisabled) {
+			return;
+		}
 		// console.log(this._alwaysIncludeValues);
 		const saveData = extendAlwaysValuesOntoSaveDate(
 			this._valuesToSave,
@@ -600,7 +615,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		if (!Object.keys(this._valuesToSave).length) {
 			return;
 		}
-		this.cancelSave();
+		this.cancelAutoSave();
 		this._dispatchSaveData();
 	}
 

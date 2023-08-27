@@ -8,7 +8,7 @@ Fragment forms offers:
 - Form submissions - with support for progressive enhancement and form re-population.
 - Zod validation - validate your data on the front end before you ever send it to the backend.
 - FormData to object with types coerced -  FormData is converted to an object with string values coerced to `numbers`, `booleans` and `date`.
-- Autosaving form changes - changes are only saved when there's an **ACTUAL** change to the form.
+- Autosaving form changes - changes (fragments) are only saved when there's an **ACTUAL** change to the form.
 - Form change fragments - only the fields that changed and pass validation get submitted and not the entire form.
 - Form change fragments bundling - all field changes within a specified timeframe are bundled together so only 1 request is made with all the changes.
 
@@ -52,7 +52,7 @@ For a field to be coerced to a specific type you need to add the `(type)` onto t
     Age: <input name="age(number)" type="number"><br>
     Date of birth <input name="dob(date)" type="date"><br>
     Date and time of birth: <input name="dobat(dateTime)" type="datetime-local"><br>
-    Agree to storing your data: <input name="agree(boolean)" type="checkbox" value="1"><br>
+    Agree to storing your data: <input name="agree(boolean)" type="checkbox" value="true"><br>
     <input type="submit">
 </form>
 ```
@@ -66,7 +66,7 @@ const data = {
     age: 20, // (number) will convert to a number or NaN if the value is not a number
     dob: Date, // '1990-01-01T00:00:00.000Z' (date) will always have time set to 00:00
     dobat: Date // '1990-01-101T19:09:33.000Z' (dateTime) will always include time
-    agree: true // A value of "0" is considered false, "1" is true
+    agree: true // A value of "false" is considered false, "true" is true
 }
 ```
 The built in types that are supported include `(string)`, `(boolean)`, `(number)`, `(date)`, `(dateTime)`
@@ -186,7 +186,7 @@ But how do we know exactly which child was updated?
 
 This is where the always include prefix (`_$`)  comes in handy
 
-Now let's add the always include prefix (`_$`) to our hidden input's name, changing from `"children[1].id"` to `name="children[1]._$id"`
+Now let's add the always include prefix (`_$`) to our hidden input's name, changing from `"children[1].id"` to `"children[1]._$id"`
 
 The fragment will now look like:
 ```js
@@ -235,16 +235,16 @@ e.g. let's also add a  hidden input with the name `"_$parentId"` and prefix `.na
 	<input type="submit" />
 </form>
 ```
-When a a single change is made now to any of the "children" fields the fragment will look like:
+When a we change the value "Brown" to "Smith" now, the fragment will look like:
 ```js
 const fragment = {
     parentId:"parent-random-uuid",
     children:[
-    0:empty,
-    1:{
-        id: "child-2-random-uuid",
-        name: {first:"Bobby", last:"Smith"},
-    }
+        0:empty,
+        1:{
+            id: "child-2-random-uuid",
+            name: {first:"Bobby", last:"Smith"},
+        }
    ]
 }
 ```
@@ -252,23 +252,55 @@ const fragment = {
 
 ## Frontend usage
 
-The `POST` function used below is just for demonstrative purposes \
-Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
+### Creating our FragmentForms object
+
+The most minimal implementation requires 0 options.
+```ts
+const FF = new FragmentForms();
+```
+
+All options
+```ts
+const FF = new FragmentForms({
+    schema: ZodSchema; //Default is an internal zod schema which ensures your data remains in a suitable format
+    saveSchema: ZodSchemaPartial; // Unless provided, the schema provided in "schema" will be converted to deep partial for saveSchema
+    debounce: 500; // default is 500 (0.5s)
+    autoSaveTimeout: 0; // default is 0 (disabled), provide a number greater than debounce
+    save: false; // default is false, true to enable saving fragments
+    data: null; // default is null. Provide and object you wish to populate the form with initially e.g. in progressive enhancement
+    submitSuccessTimeout: 0; // default is 0 (no timer).
+    saveSuccessTimeout: 3000; //default is 3000 (3s),
+    enhance: true // default is true. If false, form submit events will not be intercepted and will have usual browser submit behaviour
+});
+```
+
+### Attaching the form
+The first thing we need to do is attach our form like so:
+```ts
+FF.form( document.querySelector("form") )
+```
+This will then attach all the internal event listeners etc.
+
 
 ### Pre-filling attributes
-We first need to create an `attrs` function that will create the attributes for our fields.
+Now we need create to an `attrs` function that will create the attributes for our fields.
+
 #### Empty form
-```js
-import { FragmentForm } from 'fragment-forms';
-const attrs = FragmentForm.attributes();
+```ts
+const attrs = FF.attributes();
 ```	
 
 #### Form with value population
-`FragmentForm.attributes` accepts 1 argument which can be `null` for an empty form, or an object of values. 
-```js
+```ts
 import { FragmentForm } from 'fragment-forms';
-const data = await prefillDataFromDatabase();
-const attrs = FragmentForm.attributes(data);
+const FF = new FragmentForms({
+    data: {
+        existing:{
+            data:true
+        }
+    }
+});
+const attrs = FF.attributes();
 ```	
 
 #### Using the attrs function
@@ -326,7 +358,65 @@ const attrs = FragmentForm.attributes(data);
 ```
 
 
-### Events
+
+### Events using the `.listen` method
+
+Lastly we need to register the events we want to listen to
+e.g.
+```ts
+FF.listen('event', function(detail){
+    //do something with detail
+});
+```
+
+#### All events
+
+- `values` - detail - is an object of all the form data in it's current state (no validation)
+  
+- `issues` - detail is zod issues in an object formatted structure
+- `noPathIssues` - detail is zod issues with no path as an array of strngs
+- `error` - detail is an error from save/submit
+  
+- `submitFormData` - detail - is FormData containing the form data which has passed validation
+- `submitData` - detail - is an object containing the form data which has passed validation
+- `submitting` - detail is a boolean based on whether a submit is occuring / finished
+- `submitSuccess` - detail is boolean/undefined - true is submit was successfull, false if unsuccessfull, undefined if no current state. \
+  If "submitSuccessTimeout" option is a number the value will return to undefined after x seconds. \
+  If "submitSuccessTimeout" is 0 the value will remain the last set boolean.
+
+- `autoSaveTimeLeft` - detail is a number representing seconds left before auto save is run
+- `canSave` - detail is boolean based on whether there is data that is ready to be saved
+- `saveData` - detail -  is an object containing the fragment data which has passed validation
+- `saving` - detail is a boolean based on whether a save is occuring / finished
+- `saveSuccess` - detail is boolean/undefined - true is save was successfull, false if unsuccessfull, undefined if no current state. \
+  If "saveSuccessTimeout" option is a number the value will return to undefined after x seconds. \
+  If "saveSuccessTimeout" is 0 the value will remain the last set boolean.
+- `savedData` - detail - is an object of all data that has been saved previously
+
+All the types for the event detail can be infered e.g. `values` type can be inferred using `typeof FF.types.values`
+
+### Methods
+
+- `.form(formEl)` - attaches the form element
+- `.addEventListener()` - works like regular addEventListener except will queue any events before the form is attached and then adds events after
+- `.cleanUp()` - cancels all timeouts and intervals and removes any evet listeners added with `.addEventListener()` method
+- `.disabledAll()` - disables everything in the form
+- `.enabledAll()` - enables everything that was dsiabled in the form (unless previously disabled)
+- `.listen(event, callback)` - listen to custom events
+- `.clear()` - clears all fields and resets issues
+- `.fill(data)` - clears the form and populates form with data (only works on front end)
+- `.cancelAutoSave()` - cancels autosave timers
+- `.submitStart()` - disabled all form elements and let's FF know an attempt to submit the form is happening
+- `.submitSuccess()` - enables everything, and FF will add the data to a ledger of previous saved data
+- `.submitFailed()` - enables everything, but FF will not add data to a ledger
+- `.saveStart()` - disabled all form elements and let's FF know an attempt to save is happening
+- `.saveSuccess()` - enables everything, and FF will add the data to a ledger of previous saved data
+- `.saveFailed()` - enables everything, but FF will not add data to a ledger
+- `.issues(issues)` - (can also be for PE) add issues returned backend to FF, also returns issues formatted
+- `.noPathIssues()` - (can also be for PE) get noPathIssues returned from the backend (must used after calling `.issues()`)
+- `.error(error)` - (can also be for PE) set errors from backend
+
+
 
 
 ### Setting up form submission
@@ -477,6 +567,8 @@ This will remove event listeners as well as clear any timeouts and intervals tha
 
 ## Backend usage
 
+The `POST` function used below is just for demonstrative purposes \
+Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
 ### Form submission w/ progressive enhancement or fetch (using FormData)
 ```js
 import { formToJSON } from 'fragment-forms';
