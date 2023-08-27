@@ -54,9 +54,6 @@ export type FragmentFormsConstructorOpts<ZSchema extends AllowedZSchema> = {
 	debounce?: number;
 	autoSaveTimeout?: number;
 	save?: boolean;
-	data?: any;
-	submitSuccessTimeout?: number;
-	saveSuccessTimeout?: number;
 };
 
 export type FragmentFormsOpts = {
@@ -65,9 +62,6 @@ export type FragmentFormsOpts = {
 	debounce: number;
 	autoSaveTimeout: number;
 	save: boolean;
-	data: any;
-	submitSuccessTimeout: number;
-	saveSuccessTimeout: number;
 };
 
 export type AddEventListenerArgs = Parameters<HTMLFormElement['addEventListener']>;
@@ -85,9 +79,6 @@ export type CEDT<ZSchema extends AllowedZSchema> = {
 	savedData: z.infer<ZSchema>;
 	saving: boolean;
 	submitting: boolean;
-	error: Error | false;
-	submitSuccess: undefined | boolean;
-	saveSuccess: undefined | boolean;
 };
 
 export type CEDTCB<ZSchema extends AllowedZSchema> = {

@@ -453,8 +453,9 @@ export function addOrRemoveSaveValues(path: string[], _target: any, source: any)
 	let target = data;
 	for (let i = 0, iLen = path.length; i < iLen; i++) {
 		const currentKey = path[i];
-		const currentSourceTarget = sourceTarget?.[currentKey] || {};
-		const currentTarget = target?.[currentKey] || {};
+		const currentSourceTarget =
+			typeof sourceTarget?.[currentKey] === 'undefined' ? {} : sourceTarget[currentKey];
+		const currentTarget = typeof target?.[currentKey] === 'undefined' ? {} : target[currentKey];
 		const last = i === iLen - 1;
 		const secondToLast = i === iLen - 2;
 		if (secondToLast && isArray) {
@@ -478,18 +479,17 @@ export function addOrRemoveSaveValues(path: string[], _target: any, source: any)
 		target[currentKey] = currentTarget;
 		target = target[currentKey];
 	}
-
 	return clearEmpties(data);
 }
 // DON'T CHANGE CLEAR EMPTIES, HAS SPECIFIC FUNCTION,
 // WRITE ANOTHER FN IF NEED SIMILAR FUNCTIONALITY
 export function clearEmpties(o: any) {
 	for (let k in o) {
-		if (o?.[k] === undefined) {
+		if (typeof o[k] === 'undefined') {
 			delete o?.[k];
 		}
 
-		if (!o[k] || typeof o[k] !== 'object' || o[k] instanceof Date) {
+		if (isPrimitive(o[k])) {
 			continue;
 		}
 

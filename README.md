@@ -6,9 +6,10 @@ Fragment forms is a new approach to handling forms by taking advantage of the na
 
 Fragment forms offers:
 - Form submissions - with support for progressive enhancement and form re-population.
-- FormData to object with types coerced -  FormData is converted to an object with types coerced to `numbers`, `booleans` and `date`.
+- Zod validation - validate your data on the front end before you ever send it to the backend.
+- FormData to object with types coerced -  FormData is converted to an object with string values coerced to `numbers`, `booleans` and `date`.
 - Autosaving form changes - changes are only saved when there's an **ACTUAL** change to the form.
-- Form change fragments - only the fields that changed get submitted and not the entire form.
+- Form change fragments - only the fields that changed and pass validation get submitted and not the entire form.
 - Form change fragments bundling - all field changes within a specified timeframe are bundled together so only 1 request is made with all the changes.
 
 
@@ -29,7 +30,7 @@ e.g. the following form
 </form>
 ```
 
-is converted on the backend to
+FormData is converted on the backend to
 ```js
 import { formToJSON } from 'fragment-forms';
 
@@ -204,29 +205,29 @@ const fragment = {
 
 The always prefix works for all direct ancestors too! 
 
-And, it is also possible to include entire arrays by prefixing the square brackets like `_$[index]` 
+And you can also opt in the entire object by prefixing with `_$`
 
-e.g. let's also add a  hidden input with the name `"_$parentId"`.
+e.g. let's also add a  hidden input with the name `"_$parentId"` and prefix `.name`
 
 ```html
 <form method="POST">
     <input name="_$parentId" value="parent-random-uuid" type="hidden" /><br />
 
-	Child 1 <input name="children_$[0].id" value="child-1-random-uuid" type="hidden" /><br />
-	First name:<input name="children_$[0].name.first" value="Emily" /><br />
-	Last name:<input name="children_$[0].name.last" value="Brown" /><br />
-	Sex: Male<input name="children_$[0].sex" value="male" type="radio" /> Female<input
-		name="children_$[0].sex"
+	Child 1 <input name="children[0]._$id" value="child-1-random-uuid" type="hidden" /><br />
+	First name:<input name="children[0]._$name.first" value="Emily" /><br />
+	Last name:<input name="children[0]._$name.last" value="Brown" /><br />
+	Sex: Male<input name="children[0].sex" value="male" type="radio" /> Female<input
+		name="children[0].sex"
 		value="female"
 		type="radio"
 		checked
 	/>
 	<br />
-	Child 2 <input name="children_$[1].id" value="child-2-random-uuid" type="hidden" /><br />
-	First name:<input name="children_$[1].name.first" value="Bobby" /><br />
-	Last name:<input name="children_$[1].name.last" value="Brown" /><br />
-	Sex: Male<input name="children_$[1].sex" value="male" type="radio" checked /> Female<input
-		name="children_$[1].sex"
+	Child 2 <input name="children[1]._$id" value="child-2-random-uuid" type="hidden" /><br />
+	First name:<input name="children[1]._$name.first" value="Bobby" /><br />
+	Last name:<input name="children[1]._$name.last" value="Brown" /><br />
+	Sex: Male<input name="children[1].sex" value="male" type="radio" checked /> Female<input
+		name="children[1].sex"
 		value="female"
 		type="radio"
 	/>
@@ -239,15 +240,10 @@ When a a single change is made now to any of the "children" fields the fragment 
 const fragment = {
     parentId:"parent-random-uuid",
     children:[
-    {
-        id: "child-1-random-uuid",
-        name: {first:"Emily", last:"Brown"},
-        sex:"female"
-    },
-    {
+    0:empty,
+    1:{
         id: "child-2-random-uuid",
         name: {first:"Bobby", last:"Smith"},
-        sex:"female"
     }
    ]
 }
@@ -256,7 +252,7 @@ const fragment = {
 
 ## Frontend usage
 
-The `POST` function is just for demonstrative purposes \
+The `POST` function used below is just for demonstrative purposes \
 Adapt the `POST` function to your preferred JS framework's implementation for handling POST requests
 
 ### Pre-filling attributes
@@ -330,39 +326,11 @@ const attrs = FragmentForm.attributes(data);
 ```
 
 
+### Events
+
+
 ### Setting up form submission
-Whilst FF doesn't actually get involved with form submission, we still need to let it know that it's happening.
-
-#### Submitting form as FormData
-```js
-const form = document.querySelector('form')
-function submit() {
-    // Here we are telling FF that we are now attempting to submit the form
-    // This will disable all elements in the form
-    // This will also cancel the autosave timer
-    FF.submitStart(); 
-    
-    const response = fetch('/saveInfo', {
-        method: 'POST',
-        body: new FormData(form)
-    });
-
-    response
-        .then(async function (response) {
-            console.log(await response.json());
-            // Here we tell FF that the submission was successfull
-            // FF will add the changes to the ledger of previous successfull changes
-            // FF will also re-enable all elements
-            FF.submitSuccess();
-        })
-        .catch(function () {
-            // Here we tell FF to re-enable all elements
-            // FF will not add the changes to the ledger of previous changes
-            FF.submitFinally();
-        });
-}
-form.onsubmit = submit;
-```
+Whilst FF doesn't actually get involved with form submission, we still need to let it know that it's happening so we can update the internal ledger.
 
 #### Submitting form as object with types (using superjson)
 ```js
@@ -403,7 +371,7 @@ form.onsubmit = submit;
 
 ### Setting up autosave
 ```js
-const saveButton = document.querySelect("#save");
+const saveButton = document.querySelector("#save");
 const FF = new FragmentForm(document.querySelector('form'), {
     debounceTimeout: 500, // Input debouncing, required as we don't want to be running expensive operations on every input event
     autosaveTimeout: 4000 // 0 (default) disables autosave. this should be a number greater than the option "debounceTimeout"
@@ -501,7 +469,7 @@ function save(fragment: object) {
 ### Cleaning up
 Before removing the form from the view you should also run some cleanup for the `FF` object.
 ```JS
-FF.destroy();
+FF.cleanUp();
 ```
 This will remove event listeners as well as clear any timeouts and intervals that were created by FF.
 

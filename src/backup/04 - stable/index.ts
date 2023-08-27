@@ -39,21 +39,16 @@ const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'u
 
 class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _opts: FragmentFormsOpts = {
-		schema: formDataStructure, // ZodObject
-		saveSchema: null as any, // if left blank, we will convert object to deepartial
-		debounce: 500, // should be 300+, don't want to run expensive operations often
-		autoSaveTimeout: 0, //0 disabled, otherwise should be a number greater than debounce
-		save: false, // enable save, if autoSaveTimeout is > 0 , automatically true
-		data: null, // data returned from progessive enhancement
-		submitSuccessTimeout: 0, // default 0 to disable
-		saveSuccessTimeout: 3000 // 0 to disabled
+		schema: formDataStructure,
+		saveSchema: null as any,
+		debounce: 500,
+		autoSaveTimeout: 0,
+		save: false
 	};
 
 	private _formDisabled: boolean = false;
 
 	private _onInputTimeout: any = noop;
-	private _submitSuccessTimeout: any;
-	private _saveSuccessTimeout: any;
 
 	private _form: HTMLFormElement | null = null;
 
@@ -114,15 +109,16 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		if (!isBrowser) {
 			return this;
 		}
-		if (this._waitingEventListeners.length) {
+		if (this._waitingEventListeners) {
 			for (let i = 0, iLen = this._waitingEventListeners.length; i < iLen; i++) {
 				this.addEventListener(...(this._waitingEventListeners[i] as AddEventListenerArgs));
 				this._addedEventListeners.push(this._waitingEventListeners[i] as AddEventListenerArgs);
 				this._waitingEventListeners[i] = null;
 			}
 		}
-		// this._onSubmit();
+		this._onSubmit();
 		this._onInput();
+
 		this._setSaveStatus(false);
 		return this;
 	}
@@ -143,8 +139,6 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		if (!isBrowser) {
 			return this;
 		}
-		clearTimeout(this._submitSuccessTimeout);
-		clearTimeout(this._saveSuccessTimeout);
 		this._cancelAutoSaveTimer();
 		this._clearAutoSaveDebounce();
 		this._onInputTimeout();
@@ -170,9 +164,6 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	public listen(name: 'values', callback: CEDTCB<ZSchema>['values']): this;
 	public listen(name: 'saving', detail: CEDTCB<ZSchema>['saving']): this;
 	public listen(name: 'submitting', detail: CEDTCB<ZSchema>['submitting']): this;
-	public listen(name: 'error', detail: CEDTCB<ZSchema>['error']): this;
-	public listen(name: 'submitSuccess', detail: CEDTCB<ZSchema>['submitSuccess']): this;
-	public listen(name: 'saveSuccess', detail: CEDTCB<ZSchema>['saveSuccess']): this;
 	public listen(name: string, callback: (detail: any) => void): this {
 		if (!isBrowser) {
 			return this;
@@ -196,9 +187,6 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 	private _dispatch(name: 'values', detail: CEDTD<ZSchema>['values']): this;
 	private _dispatch(name: 'saving', detail: CEDTD<ZSchema>['saving']): this;
 	private _dispatch(name: 'submitting', detail: CEDTD<ZSchema>['submitting']): this;
-	private _dispatch(name: 'error', detail: CEDTD<ZSchema>['error']): this;
-	private _dispatch(name: 'submitSuccess', detail: CEDTD<ZSchema>['submitSuccess']): this;
-	private _dispatch(name: 'saveSuccess', detail: CEDTD<ZSchema>['saveSuccess']): this;
 	private _dispatch(name: string, detail: () => any): this {
 		if (this._customEventListeners.hasOwnProperty(name)) {
 			const _detail = detail();
@@ -435,14 +423,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
-	private _attributesCalled = false;
-	public attributes() {
-		if (this._attributesCalled) {
-			throw new Error('.attributes() is not re-usabled, only call this method once.');
-		}
-		this._attributesCalled = true;
-		return attributes(this._opts.data);
-	}
+	public static attributes = attributes;
 
 	private _disable(disable: boolean) {
 		if (!this._form) {
@@ -506,35 +487,10 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this;
 	}
 
-	private _dispatchSaveSuccess(state: undefined | boolean) {
-		const _this = this;
-		clearTimeout(this._saveSuccessTimeout);
-		this._dispatch('saveSuccess', () => state);
-
-		if (state !== undefined && this._opts.saveSuccessTimeout) {
-			this._saveSuccessTimeout = setTimeout(function () {
-				_this._dispatch('saveSuccess', () => undefined);
-			}, this._opts.saveSuccessTimeout);
-		}
-	}
-
-	private _dispatchSubmitSuccess(state: undefined | boolean) {
-		const _this = this;
-		clearTimeout(this._submitSuccessTimeout);
-		this._dispatch('submitSuccess', () => state);
-
-		if (state !== undefined && this._opts.submitSuccessTimeout) {
-			this._submitSuccessTimeout = setTimeout(function () {
-				_this._dispatch('submitSuccess', () => undefined);
-			}, this._opts.submitSuccessTimeout);
-		}
-	}
-
 	public saveStart() {
 		this.disableAll();
 		this.cancelSave();
 		this._dispatch('saving', () => true);
-		this._dispatchSaveSuccess(undefined);
 		return this;
 	}
 
@@ -545,14 +501,12 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		this.enableAll();
 		_this._setSaveStatus(false);
 		this._dispatch('saving', () => false);
-		this._dispatchSaveSuccess(true);
 		return this;
 	}
 
-	public saveFailed() {
+	public saveFinally() {
 		this.enableAll();
 		this._dispatch('saving', () => false);
-		this._dispatchSaveSuccess(false);
 		return this;
 	}
 
@@ -560,7 +514,6 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		this.disableAll();
 		this.cancelSave();
 		this._dispatch('submitting', () => true);
-		this._dispatchSubmitSuccess(undefined);
 		return this;
 	}
 
@@ -571,14 +524,12 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		this.enableAll();
 		_this._setSaveStatus(false);
 		this._dispatch('submitting', () => false);
-		this._dispatchSubmitSuccess(true);
 		return this;
 	}
 
-	public submitFailed() {
+	public submitFinallyy() {
 		this.enableAll();
 		this._dispatch('submitting', () => false);
-		this._dispatchSubmitSuccess(false);
 		return this;
 	}
 
@@ -611,24 +562,8 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			_this.manualSave();
 		};
 	}
-
-	public issues(issues: undefined | ZodIssue[]) {
-		if (issues === undefined) {
-			return {};
-		}
-		this._setIssues(formatIssues(issues));
-		return this._issues;
-	}
-	public noPathIssues() {
-		return this._noPathIssues;
-	}
-
-	public error(error: Error | false) {
-		this._dispatch('error', () => error);
-		return;
-	}
 }
 
-export { FragmentForms, formToJSON };
+export { FragmentForms };
 
 function noop() {}

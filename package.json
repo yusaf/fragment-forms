@@ -1,6 +1,6 @@
 {
 	"name": "fragment-forms",
-	"version": "0.0.8",
+	"version": "0.0.10",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && npm run package",
