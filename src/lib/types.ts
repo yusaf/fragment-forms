@@ -46,7 +46,8 @@ export type FormElement = HTMLInputElement | HTMLSelectElement | HTMLTextAreaEle
 
 export type FormElements = FormElement[];
 
-export type AllowedZSchema = z.ZodRecord<any> | z.ZodObject<any> | z.ZodEffects<any> | z.ZodAny;
+export type AllowedZSchema = z.ZodRecord<any> | z.AnyZodObject | z.ZodEffects<any> | z.ZodAny;
+// export type AllowedZSchema = z.ZodTypeAny;
 
 export type FragmentFormsConstructorOpts<ZSchema extends AllowedZSchema> = {
 	schema?: ZSchema;
