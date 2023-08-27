@@ -15,6 +15,13 @@ export const actions = {
 			// might error so assign to error
 		}
 
+		return fail(400, {
+			success: false,
+			data,
+			issues,
+			error: 'ERRROR'
+		});
+
 		delete data?.password;
 		delete data?.confirm_password;
 		if (issues || error) {

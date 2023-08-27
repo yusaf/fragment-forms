@@ -240,6 +240,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 			const entries = toEntries(formData);
 			const data = modifiedEntriesToJSON(modifyEntries(entries));
 			const zodIssues = _this._opts.schema.safeParse(data);
+
 			if (zodIssues && 'error' in zodIssues) {
 				_this._setIssues(formatIssues(zodIssues.error.issues));
 			} else {
@@ -638,7 +639,7 @@ class FragmentForms<ZSchema extends AllowedZSchema = typeof formDataStructure> {
 		return this._noPathIssues;
 	}
 
-	public error(error: Error | false) {
+	public error(error: string | false) {
 		this._dispatch('error', () => error);
 		return;
 	}

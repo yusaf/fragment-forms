@@ -13,6 +13,7 @@ export default z
 				first: requiredString.min(4),
 				last: requiredString.min(4)
 			}),
+			bio: requiredString,
 			sex: z.enum(['male', 'female']),
 			dob: z.date(),
 			interests: z.array(z.string()).min(2),
@@ -34,7 +35,7 @@ export default z
 			})
 		})
 	})
-	.refine((data) => data.password !== data.confirm_password, {
+	.refine((data) => data.password === data.confirm_password, {
 		message: 'Passwords do not match',
 		path: ['confirm_password']
 	});

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { FragmentForms } from 'fragment-forms';
 	import { onMount } from 'svelte';
-	import schema from './schema';
+	import { schema } from './form';
 	import { writable } from 'svelte/store';
 	import Issue from '../../issue.svelte';
 
@@ -9,10 +9,7 @@
 
 	const test = new FragmentForms({
 		schema,
-		// save: true
-		autoSaveTimeout: 2000,
 		data: form?.data
-		// enhance: false
 	});
 
 	const saving = writable<typeof test.types.saving>(false);
@@ -38,18 +35,18 @@
 	test.listen('submitFormData', function (formData) {
 		test.submitStart();
 
-		const response = fetch('/tests/04', {
+		const response = fetch('/tests/05?submit=true', {
 			method: 'POST',
 			body: formData
 		});
 
 		response
 			.then(async function (response) {
-				console.log(await response.json());
+				console.log('SUCCESS', await response.json());
 				test.submitSuccess();
 			})
-			.catch(async function (error) {
-				console.log(await error.json());
+			.catch(function (error) {
+				console.log('ERROR', error);
 				test.submitFailed();
 			});
 	});
@@ -100,68 +97,6 @@
 	Confirm Password:<br />
 	<Issue issue={$issues?.confirm_password?._issue} />
 	<input {...attrs('confirm_password', 'password', { 'data-no-save': true })} /><br />
-	<br />
-	Secret words:<br />
-	<Issue issue={$issues?.secrets?._issue} />
-	{#each { length: 3 } as _, index}
-		<Issue issue={$issues?.secrets?.[index]?._issue} />
-		Secret {index + 1}: <input {...attrs('secrets[]')} /><br />
-	{/each}
-	<br />
-	Name:
-	<input {...attrs('user.name._$id', 'hidden', 'random-user-name-id')} /><br />
-	<Issue issue={$issues?.user?.name?.first?._issue} />
-	First: <input {...attrs('user.name.first', 'text')} /><br />
-	<Issue issue={$issues?.user?.name?.last?._issue} />
-	Last: <input {...attrs('user.name.last', 'text')} /><br />
-	<br />
-	Bio:
-	<Issue issue={$issues?.user?.bio?._issue} />
-	<textarea {...attrs('user.bio', 'textarea')} /><br />
-	<br />
-	Sex:<br />
-	<Issue issue={$issues?.user?.sex?._issue} />
-	Male: <input {...attrs('user.sex', 'radio', 'male')} /><br />
-	Female: <input {...attrs('user.sex', 'radio', 'female')} /><br />
-	<br />
-	Date Of Birth:
-	<Issue issue={$issues?.user?.dob?._issue} />
-	<input {...attrs('user.dob(date)', 'date')} /><br />
-	<br />
-	Interests<br />
-	<Issue issue={$issues?.user?.interests?._issue} />
-	Sports:<input {...attrs('user.interests[]', 'checkbox', 'sports')} /><br />
-	Politics:<input {...attrs('user.interests[]', 'checkbox', 'politics')} /><br />
-	Finance:<input {...attrs('user.interests[]', 'checkbox', 'finance')} /><br />
-	<br />
-	Contact preferences:<br />
-	<Issue issue={$issues?.user?.contact?._issue} />
-	<Issue issue={$issues?.user?.contact?._issue_in} />
-	<select {...attrs('user.contact[]', 'select')}>
-		<option {...attrs('user.contact[]', 'option', 'sms')} value="sms">SMS</option>
-		<option {...attrs('user.contact[]', 'option', 'email')} value="email">E-mail</option>
-		<option {...attrs('user.contact[]', 'option', 'letter')} value="Letter">Letter</option>
-	</select><br />
-	<br />
-
-	Children<br />
-
-	{#each { length: 3 } as _, index}
-		Name:
-		<input {...attrs(`children[${index}]._$id`, 'hidden', `random-child-id-${index}`)} /><br />
-		<Issue issue={$issues?.children?.[index]?.name?.first?._issue} />
-		First: <input {...attrs(`children[${index}].name.first`, 'text')} /><br />
-		<Issue issue={$issues?.children?.[index]?.name?.last?._issue} />
-		Last: <input {...attrs(`children[${index}].name._$last`, 'text')} /><br />
-		<br />
-	{/each}
-
-	Consent to share details:<br />
-	<Issue issue={$issues?.user?.consent?._issue} />
-	Yes:
-	<input {...attrs('user.consent(boolean)', 'radio', true)} /><br />
-	No:
-	<input {...attrs('user.consent(boolean)', 'radio', false)} /><br />
 	<br />
 	Agree:<br />
 	<Issue issue={$issues?.do?.you?.agree?._issue} />

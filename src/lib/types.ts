@@ -87,7 +87,7 @@ export type CEDT<ZSchema extends AllowedZSchema> = {
 	savedData: z.infer<ZSchema>;
 	saving: boolean;
 	submitting: boolean;
-	error: Error | false;
+	error: string | false;
 	submitSuccess: undefined | boolean;
 	saveSuccess: undefined | boolean;
 };
