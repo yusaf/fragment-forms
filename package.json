@@ -1,6 +1,6 @@
 {
 	"name": "fragment-forms",
-	"version": "0.0.10",
+	"version": "0.0.18",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && npm run package",
@@ -20,13 +20,30 @@
 			"types": "./dist/index.d.ts",
 			"default": "./dist/index.js"
 		},
-		"./dist/utils": {
+		"./utils": {
 			"types": "./dist/utils.d.ts",
 			"default": "./dist/utils.js"
+		},
+		"./types": {
+			"types": "./dist/types.d.ts",
+			"default": "./dist/types.js"
+		}
+	},
+	"typesVersions": {
+		">4.0": {
+			"utils": [
+				"./dist/utils.d.ts"
+			],
+			"types": [
+				"./dist/types.d.ts"
+			]
 		}
 	},
 	"files": [
 		"dist",
+		"dist/index.js",
+		"dist/utils.js",
+		"dist/types.js",
 		"!dist/**/*.test.*",
 		"!dist/**/*.spec.*"
 	],
@@ -56,7 +73,7 @@
 		"vitest": "^0.32.2",
 		"zod": "^3.22.2"
 	},
-	"svelte": "./dist/index.js",
+	"default": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"type": "module"
 }

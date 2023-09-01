@@ -100,7 +100,7 @@ export type CEDTD<ZSchema extends AllowedZSchema> = {
 	[key in keyof CEDT<ZSchema>]: () => CEDT<ZSchema>[key];
 };
 
-type KeyValueObject = { [key: string]: any };
+export type KeyValueObject = { [key: string]: any };
 
 type SchemaArrayToIssues<Arr extends any[]> = Arr extends (infer Inner)[]
 	? Inner extends Primitive
@@ -126,7 +126,7 @@ type SchemaObjectToIssues<Schema> = Schema extends KeyValueObject
 	  }
 	: never;
 
-type SchemaToIssues<Schema> = Schema extends KeyValueObject
+export type SchemaToIssues<Schema> = Schema extends KeyValueObject
 	? SchemaObjectToIssues<Schema>
 	: unknown;
 

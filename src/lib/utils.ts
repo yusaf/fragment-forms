@@ -305,14 +305,14 @@ const coerceTypeValues = {
 	boolean: (value: boolean) => (value === false ? 'false' : 'true'),
 	date: (value: Date) => {
 		value = typeof value === 'string' ? new Date(value) : value;
-		if (isNaN(+value)) {
+		if (!value || isNaN(+value)) {
 			return '';
 		}
 		return value.toISOString().substring(0, 16).split('T')[0];
 	},
 	dateTime: (value: Date) => {
 		value = typeof value === 'string' ? new Date(value) : value;
-		if (isNaN(+value)) {
+		if (!value || isNaN(+value)) {
 			return '';
 		}
 		return value.toISOString().substring(0, 16);
